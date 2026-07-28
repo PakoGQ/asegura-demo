@@ -3,9 +3,13 @@
 --
 -- NO correr en producción. Borra y recrea el equipo demo completo.
 --
--- Requisito previo: crear los usuarios en Supabase → Authentication → Users y
--- pegar aquí sus UUID. Sin `auth_user_id`, el login no encuentra la ficha.
--- El sitio público sí funciona sin eso: solo lee `agentes`.
+-- Se puede correr TAL CUAL, sin haber creado nada en Authentication: los UUID
+-- que no existan entran como NULL. Con eso el sitio público ya muestra los
+-- cuatro agentes.
+--
+-- Para que además funcione el LOGIN de esas cuentas: crea los usuarios en
+-- Supabase → Authentication → Users, pega sus UUID abajo y vuelve a correr
+-- este archivo.
 -- ============================================================================
 
 do $$
@@ -26,15 +30,20 @@ begin
   delete from public.usuarios where email like '%@demo.mx';
 
   -- ── Equipo ───────────────────────────────────────────────────────────────
+  -- (select id from auth.users where id = X) devuelve NULL si ese usuario no
+  -- existe, en vez de violar la foreign key. Así el seed corre aunque todavía
+  -- no hayas creado las cuentas en Authentication: el sitio público solo lee
+  -- `agentes`, y el login empieza a funcionar en cuanto pegues los UUID reales.
   insert into public.usuarios (auth_user_id, nombre, email, telefono, rol)
-  values (uid_director, 'Roberto Sandoval', 'director@demo.mx', '+523310000001', 'director')
+  values ((select id from auth.users where id = uid_director),
+          'Roberto Sandoval', 'director@demo.mx', '+523310000001', 'director')
   returning id into id_dir;
 
   insert into public.usuarios (auth_user_id, nombre, email, telefono, rol, director_id) values
-    (uid_ag1, 'Ana Ramírez',    'ana@demo.mx',    '+523310000002', 'agente', id_dir),
-    (uid_ag2, 'Luis Torres',    'luis@demo.mx',   '+523310000003', 'agente', id_dir),
-    (uid_ag3, 'Sofía Beltrán',  'sofia@demo.mx',  '+523310000004', 'agente', id_dir),
-    (uid_ag4, 'Miguel Aguirre', 'miguel@demo.mx', '+523310000005', 'agente', id_dir);
+    ((select id from auth.users where id = uid_ag1), 'Ana Ramírez',    'ana@demo.mx',    '+523310000002', 'agente', id_dir),
+    ((select id from auth.users where id = uid_ag2), 'Luis Torres',    'luis@demo.mx',   '+523310000003', 'agente', id_dir),
+    ((select id from auth.users where id = uid_ag3), 'Sofía Beltrán',  'sofia@demo.mx',  '+523310000004', 'agente', id_dir),
+    ((select id from auth.users where id = uid_ag4), 'Miguel Aguirre', 'miguel@demo.mx', '+523310000005', 'agente', id_dir);
 
   select id into u1 from public.usuarios where email = 'ana@demo.mx';
   select id into u2 from public.usuarios where email = 'luis@demo.mx';

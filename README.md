@@ -64,7 +64,8 @@ con datos de ejemplo: así se ve la demostración.
 
 1. Crea un proyecto en [supabase.com](https://supabase.com).
 2. En el **SQL Editor**, corre los archivos de `db/` en orden: `01` → `07`.
-   El `99_seed_demo.sql` es opcional y solo sirve para desarrollo.
+   El `99_seed_demo.sql` es opcional y solo sirve para desarrollo. Se puede
+   correr tal cual: los UUID de Auth que no existan entran como NULL.
 3. Copia **Project URL** y **anon public key** desde Settings → API, y pégalas
    en [supabase-config.js](supabase-config.js).
 
