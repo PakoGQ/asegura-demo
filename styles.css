@@ -84,7 +84,7 @@
     align-items: center;
   }
   .nav .nav-logo img {
-    height: 30px;
+    height: 62px;
     width: auto;
     margin-top: 0;
   }
@@ -256,11 +256,11 @@ p  { line-height: 1.7; color: var(--t2); }
 }
 .nav-logo span { color: var(--acento); }
 .nav-logo img {
-  height: 34px;
+  height: 74px;
   width: auto;
   display: block;
 }
-.footer-brand .nav-logo img { height: 84px; width: auto; }
+.footer-brand .nav-logo img { height: 120px; width: auto; }
 .nav-links {
   display: flex;
   align-items: center;
@@ -3477,7 +3477,7 @@ h4 { font-size: clamp(.95rem, 2.2vw, 1.1rem); }
   .nav { padding: 0 1rem; }
   .nav-logo { font-size: 14px; letter-spacing: .03em; }
   .nav-logo img { height: 108px; }
-  .footer-brand .nav-logo img { height: 68px; }
+  .footer-brand .nav-logo img { height: 96px; }
   .nav-center { display: none; }
   .nav-links { display: none; }
   .nav-cta { gap: .35rem; }
@@ -7574,7 +7574,7 @@ details.faq-item[open] .faq-a {
    Se sobrescribe en vez de borrar la original para no romper otras páginas
    mientras avanza el port.
    ────────────────────────────────────────────────────────────────────────── */
-:root { --nav-h: 68px; }
+:root { --nav-h: 98px; --topbar-h: 90px; }
 
 .nav {
   height: var(--nav-h);
@@ -7614,7 +7614,7 @@ details.faq-item[open] .faq-a {
 body { padding-top: var(--nav-h); }
 
 @media (max-width: 900px) {
-  :root { --nav-h: 60px; }
+  :root { --nav-h: 84px; --topbar-h: 78px; }
   .nav { padding: 0 1rem; }
   .nav-center { display: none; }
   .nav-brand-title { font-size: 1.05rem; }
@@ -7949,7 +7949,7 @@ body { padding-top: var(--nav-h); }
 .panel-topbar {
   position: sticky; top: 0; z-index: 500;
   display: flex; align-items: center; justify-content: space-between;
-  gap: 1rem; padding: .6rem 1.25rem; height: 60px;
+  gap: 1rem; padding: .5rem 1.25rem; height: var(--topbar-h);
   background: var(--card); border-bottom: 1px solid var(--border);
 }
 .panel-marca { display: flex; align-items: center; gap: .6rem; font-weight: 700; font-size: 1rem; }
@@ -7970,7 +7970,7 @@ body { padding-top: var(--nav-h); }
 
 .admin-layout { display: grid; grid-template-columns: 232px 1fr; align-items: start; }
 .admin-sidebar {
-  position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+  position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h)); overflow-y: auto;
   padding: 1rem .7rem; border-right: 1px solid var(--border); background: var(--surface);
 }
 .admin-nav-section {
@@ -8182,7 +8182,7 @@ body { padding-top: var(--nav-h); }
   .panel-topbar .toggle-disp { display: none; }
   .mobile-disp-bar {
     display: flex; align-items: center; justify-content: space-between; gap: .75rem;
-    position: sticky; top: 60px; z-index: 400;
+    position: sticky; top: var(--topbar-h); z-index: 400;
     padding: .5rem 1rem; background: var(--card);
     border-bottom: 1px solid var(--border); font-size: .82rem; color: var(--t2);
   }
@@ -8421,9 +8421,9 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
    logo-icono.png solo la V con palomita, cuadrado → PWA y favicon
    ───────────────────────────────────────────────────────────────────────── */
 .nav-logo .logo-img, .panel-marca .logo-img {
-  height: 34px; width: auto; max-width: 150px;
+  height: 74px; width: auto; max-width: 190px;
 }
-.footer-brand .logo-img { height: 84px; max-width: 210px; }
+.footer-brand .logo-img { height: 120px; max-width: 260px; }
 .logo-grande { height: 120px; max-width: 240px; margin: 0 auto; }
 
 /* El logo ya dice "Vaxti": el texto de al lado solo aparece si el archivo
@@ -8434,6 +8434,6 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
 .nav-logo:has(.logo-img.sin-logo) ~ .solo-sin-logo { display: block; }
 
 @media (max-width: 900px) {
-  .nav-logo .logo-img, .panel-marca .logo-img { height: 30px; }
-  .footer-brand .logo-img { height: 68px; }
+  .nav-logo .logo-img, .panel-marca .logo-img { height: 62px; }
+  .footer-brand .logo-img { height: 96px; }
 }
