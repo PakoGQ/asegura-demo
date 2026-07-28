@@ -12,11 +12,11 @@
    1. Catálogos — espejo de los CHECK de db/. Si cambia uno, cambia el otro.
    =========================================================================== */
 const RAMOS = {
-  auto:           { label: 'Auto',            icono: 'fa-car',            color: '#ee7203' },
+  auto:           { label: 'Auto',            icono: 'fa-car',            color: '#f4632b' },
   vida:           { label: 'Vida',            icono: 'fa-heart-pulse',    color: '#1f6f8b' },
   gastos_medicos: { label: 'Gastos Médicos',  icono: 'fa-kit-medical',    color: '#2e9e7e' },
   hogar:          { label: 'Hogar',           icono: 'fa-house-chimney',  color: '#7c5cbf' },
-  empresarial:    { label: 'Empresarial',     icono: 'fa-building',       color: '#101a26' },
+  empresarial:    { label: 'Empresarial',     icono: 'fa-building',       color: '#16264f' },
   educativo:      { label: 'Educativo',       icono: 'fa-graduation-cap', color: '#d9a520' },
   fianzas:        { label: 'Fianzas',         icono: 'fa-file-signature', color: '#9c6644' },
 };

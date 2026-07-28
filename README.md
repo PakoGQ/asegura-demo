@@ -1,4 +1,4 @@
-# Asegura — directorio y agenda de agentes de seguros
+# Vaxti — directorio y agenda de agentes de seguros
 
 Sitio donde un cliente busca un agente de seguros cerca de él, ve su perfil y
 los ramos que maneja, y le agenda una asesoría. Más dos paneles privados: uno

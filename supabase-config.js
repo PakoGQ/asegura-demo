@@ -10,8 +10,9 @@ window.CONFIG = {
   SUPABASE_URL: 'https://TU-PROYECTO.supabase.co',
   SUPABASE_ANON_KEY: 'TU_ANON_KEY_AQUI',
 
-  // [GNP] Específico del cliente beta — cambiar al replicar
-  MARCA: 'Asegura',
+  // [VAXTI] Específico del cliente — cambiar al replicar
+  MARCA: 'Vaxti',
+  SUBMARCA: 'Asesores Financieros',
   ASEGURADORA: '',   // vacío en el demo público; aquí va la aseguradora del cliente
   TAGLINE: 'Tu agente de seguros, cerca de ti',
   CIUDAD: 'Guadalajara',
