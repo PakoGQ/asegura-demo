@@ -67,6 +67,11 @@ create table if not exists public.resenas (
   created_at   timestamptz not null default now()
 );
 
+-- Se vuelve a fijar siempre: `create table if not exists` no toca una tabla que
+-- ya existe, y este default lleva acento. Ver la nota en 02_agentes.sql.
+alter table public.resenas
+  alter column autor set default 'Anónimo';
+
 create index if not exists resenas_agente_idx on public.resenas (agente_id)
   where aprobada;
 create index if not exists resenas_pendientes_idx on public.resenas (created_at desc)

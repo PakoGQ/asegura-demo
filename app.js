@@ -1205,7 +1205,7 @@ async function guardPanel(rolRequerido) {
   if (rolDemo) {
     if (rolDemo !== rolRequerido) { location.replace(`panel-${rolDemo}.html`); return null; }
     const yo = rolDemo === 'director'
-      ? { nombre: 'Roberto Sandoval', rol: 'director' }
+      ? { nombre: 'Luis Lujano', rol: 'director' }
       : Object.assign({ rol: 'agente' }, AGENTES[0]);
     return { rol: rolDemo, usuario: yo, demo: true };
   }

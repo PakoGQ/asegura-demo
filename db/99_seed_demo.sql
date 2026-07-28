@@ -27,6 +27,33 @@ declare
   a1 uuid; a2 uuid; a3 uuid; a4 uuid;
   id_cli  uuid;
 begin
+  -- ── Limpieza ─────────────────────────────────────────────────────────────
+  -- Las tablas de cartera cuelgan de `usuarios` con `on delete restrict`, no
+  -- con cascade: borrar un agente que ya tiene pólizas es un accidente, no una
+  -- operación normal. Bien puesto para producción, pero obliga a este seed a
+  -- barrer en orden inverso de dependencia antes de tocar `usuarios`.
+  --
+  -- Sin esto, la SEGUNDA corrida falla con
+  --   violates foreign key constraint "clientes_agente_id_fkey"
+  -- porque la cartera que sembró la primera corrida bloquea el borrado.
+  --
+  -- Lo de `agentes` hacia abajo (fotos, ramos, disponibilidad, citas, reseñas)
+  -- sí va en cascade, así que se va solo al borrar el usuario.
+  delete from public.referidos
+   where codigo_id in (select cr.id from public.codigos_referido cr
+                        join public.usuarios u on u.id = cr.agente_id
+                       where u.email like '%@demo.mx');
+  delete from public.codigos_referido
+   where agente_id in (select id from public.usuarios where email like '%@demo.mx');
+  delete from public.oportunidades
+   where agente_id in (select id from public.usuarios where email like '%@demo.mx');
+  delete from public.actividad
+   where agente_id in (select id from public.usuarios where email like '%@demo.mx');
+  delete from public.polizas
+   where agente_id in (select id from public.usuarios where email like '%@demo.mx');
+  delete from public.clientes
+   where agente_id in (select id from public.usuarios where email like '%@demo.mx');
+
   delete from public.usuarios where email like '%@demo.mx';
 
   -- ── Equipo ───────────────────────────────────────────────────────────────
@@ -36,7 +63,7 @@ begin
   -- `agentes`, y el login empieza a funcionar en cuanto pegues los UUID reales.
   insert into public.usuarios (auth_user_id, nombre, email, telefono, rol)
   values ((select id from auth.users where id = uid_director),
-          'Roberto Sandoval', 'director@demo.mx', '+523310000001', 'director')
+          'Luis Lujano', 'director@demo.mx', '+523310000001', 'director')
   returning id into id_dir;
 
   insert into public.usuarios (auth_user_id, nombre, email, telefono, rol, director_id) values

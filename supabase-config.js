@@ -7,8 +7,8 @@
    ========================================================================== */
 
 window.CONFIG = {
-  SUPABASE_URL: 'https://TU-PROYECTO.supabase.co',
-  SUPABASE_ANON_KEY: 'TU_ANON_KEY_AQUI',
+  SUPABASE_URL: 'https://jfkcnapduonxjlknxnku.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_EyHU1a4VbNUEDR5pYZ8Fyw_29r9PWKr',
 
   // [VAXTI] Específico del cliente — cambiar al replicar
   MARCA: 'Vaxti',

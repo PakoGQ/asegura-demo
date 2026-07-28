@@ -63,9 +63,10 @@ con datos de ejemplo: así se ve la demostración.
 ## Conectarlo a Supabase
 
 1. Crea un proyecto en [supabase.com](https://supabase.com).
-2. En el **SQL Editor**, corre los archivos de `db/` en orden: `01` → `07`.
-   El `99_seed_demo.sql` es opcional y solo sirve para desarrollo. Se puede
-   correr tal cual: los UUID de Auth que no existan entran como NULL.
+2. En el **SQL Editor**, pega `db/TODO_EN_UNO.sql` — son los archivos `01` a
+   `07` concatenados en orden, para no pegarlos de uno en uno. El
+   `99_seed_demo.sql` es opcional y solo sirve para desarrollo. Se puede correr
+   tal cual: los UUID de Auth que no existan entran como NULL.
 3. Copia **Project URL** y **anon public key** desde Settings → API, y pégalas
    en [supabase-config.js](supabase-config.js).
 
@@ -80,8 +81,19 @@ desaparece y el acceso a los paneles pasa a pedir cuenta real.
 
 Ninguna política permite crear directores desde la aplicación, a propósito:
 
-1. **Authentication → Users → Add user**. Copia el UID.
-2. En el SQL Editor:
+1. **Authentication → Users → Add user**, con "Auto Confirm User". Copia el UID.
+2. En el SQL Editor, dale dueño a su fila de `usuarios`.
+
+Si corriste el seed, la fila del director **ya existe** con `auth_user_id` en
+NULL. Se vincula con `db/vincular_director.sql`, no se inserta otra:
+
+```sql
+update public.usuarios
+   set auth_user_id = 'UID-QUE-COPIASTE'
+ where email = 'director@demo.mx';
+```
+
+Sin el seed, se crea desde cero:
 
 ```sql
 insert into public.usuarios (auth_user_id, nombre, email, telefono, rol)

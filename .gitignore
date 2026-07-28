@@ -8,6 +8,11 @@ tools/
 # Demo viejo del CRM: quedó desfasado tras el cambio de rumbo.
 demo/
 
+# Generado por tools/armar_sql.py a partir de db/01…07. No aporta nada al
+# repositorio que no esté ya en los archivos numerados, y duplicaría en un
+# archivo más las menciones al proyecto de referencia que hay en sus comentarios.
+db/TODO_EN_UNO.sql
+
 # ── Nunca ──
 .DS_Store
 *.log

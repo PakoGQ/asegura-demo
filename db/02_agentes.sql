@@ -67,6 +67,13 @@ create table if not exists public.agentes (
   updated_at        timestamptz not null default now()
 );
 
+-- `create table if not exists` se salta la tabla entera si ya existe, así que
+-- un cambio a un default NO se aplicaría al re-correr el archivo. Este alter lo
+-- vuelve a fijar siempre. Va aquí porque el default trae acento y un archivo
+-- mal codificado lo deja como 'Espa√±ol' sin que nada falle.
+alter table public.agentes
+  alter column idiomas set default array['Español'];
+
 create index if not exists agentes_slug_idx      on public.agentes (slug);
 create index if not exists agentes_director_idx  on public.agentes (director_id);
 create index if not exists agentes_zona_idx      on public.agentes (ciudad, zona);
