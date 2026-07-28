@@ -8032,6 +8032,22 @@ body { padding-top: var(--nav-h); }
 .admin-nota { color: var(--t3); font-size: .78rem; line-height: 1.55; margin-top: .8rem; }
 .admin-nota i { color: var(--acento); }
 
+/* ── Gráficas del panel ─────────────────────────────────────────────────────
+   Chart.js dimensiona su lienzo contra el contenedor. Necesita un padre con
+   ALTURA EXPLÍCITA: con `maintainAspectRatio:false` y un padre que se ajusta
+   al contenido, el canvas crece en cada redibujo hasta comerse la página. De
+   ahí el alto fijo en `.grafica-lienzo`.                                     */
+.graficas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.grafica-card { margin-bottom: 0; }
+.grafica-card h2 { margin-bottom: .15rem; }
+.grafica-sub { color: var(--t3); font-size: .76rem; margin: 0 0 .9rem; }
+.grafica-lienzo { position: relative; height: 220px; }
+
+@media (max-width: 900px) {
+  .graficas-grid { grid-template-columns: 1fr; }
+  .grafica-lienzo { height: 200px; }
+}
+
 .admin-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); }
 .admin-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .admin-table th {

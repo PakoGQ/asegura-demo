@@ -7,8 +7,12 @@
    ========================================================================== */
 
 window.CONFIG = {
-  SUPABASE_URL: 'https://TU-PROYECTO.supabase.co',
-  SUPABASE_ANON_KEY: 'TU_ANON_KEY_AQUI',
+  // Mismo proyecto que supabase-config.js del sitio principal, a propósito:
+  // supabase-js guarda la sesión en localStorage bajo una llave derivada del
+  // ref del proyecto. Al coincidir URL y origen, la sesión abierta en el panel
+  // se ve desde aquí y la cartera ya no vuelve a pedir login.
+  SUPABASE_URL: 'https://jfkcnapduonxjlknxnku.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_EyHU1a4VbNUEDR5pYZ8Fyw_29r9PWKr',
 
   // [GNP] Específico del cliente beta — cambiar al replicar
   ASEGURADORA_DEFAULT: 'GNP',

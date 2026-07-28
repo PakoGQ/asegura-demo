@@ -1262,9 +1262,199 @@ const RESENAS_PENDIENTES = [
 /* ===========================================================================
    14. Panel del Director (panel-director.html)
    =========================================================================== */
+
+/* Los paneles arrancan con los arreglos de arriba y `cargarDatosDirector()`
+   los sustituye por lo que haya en Supabase. Se mantiene el respaldo demo para
+   que el panel siga siendo navegable sin base — igual que hace `cargarAgentes()`
+   con el directorio público. */
+let CITAS      = CITAS_DEMO;
+let RESENAS_MOD = RESENAS_PENDIENTES;
+let DATOS_REALES_PANEL = false;
+
+async function cargarDatosDirector(sesion) {
+  if (!window.sbClient) return;
+  // Con sesión demo no se consulta: el RLS le respondería cero filas al
+  // anónimo y esos ceros pisarían los arreglos de respaldo, dejando el panel
+  // vacío en vez de navegable.
+  if (sesion && sesion.demo) return;
+  // `agentes` viene de la vista pública, que trae id y slug: con eso se cruzan
+  // las citas, que en la base guardan `agente_id`, con el resto del panel, que
+  // trabaja por slug.
+  const porId = new Map(AGENTES.map((a) => [a.id, a.slug]));
+  try {
+    const [citas, resenas] = await Promise.all([
+      sbClient.from('citas')
+        .select('id, agente_id, cliente_nombre, cliente_whatsapp, modalidad, ramo_interes, fecha, hora, estado, notas')
+        .order('fecha', { ascending: false }),
+      sbClient.from('resenas')
+        .select('id, agente_id, autor, calificacion, texto, created_at')
+        .eq('aprobada', false)
+        .order('created_at', { ascending: false }),
+    ]);
+    if (citas.error)   throw citas.error;
+    if (resenas.error) throw resenas.error;
+
+    CITAS = (citas.data || []).map((c) => ({
+      id: c.id,
+      agente: porId.get(c.agente_id) || '',
+      cliente: c.cliente_nombre,
+      wa: c.cliente_whatsapp,
+      modalidad: c.modalidad,
+      ramo: c.ramo_interes,
+      fecha: String(c.fecha).slice(0, 10),
+      hora: String(c.hora || '').slice(0, 5),
+      estado: c.estado,
+      mensaje: c.notas || '',
+    }));
+    RESENAS_MOD = (resenas.data || []).map((r) => ({
+      id: r.id,
+      agente: porId.get(r.agente_id) || '',
+      autor: r.autor,
+      calificacion: r.calificacion,
+      texto: r.texto,
+      dias: Math.max(0, Math.round((Date.now() - new Date(r.created_at)) / 86400000)),
+    }));
+    DATOS_REALES_PANEL = true;
+  } catch (e) {
+    console.warn('No se pudieron leer citas/reseñas de Supabase, usando demo:', e.message);
+  }
+}
+
 const agentePorSlug = (slug) => AGENTES.find((a) => a.slug === slug) || {};
-const citasDeEquipo = () => CITAS_DEMO.map((c) => ({ ...c, ag: agentePorSlug(c.agente) }));
+const citasDeEquipo = () => CITAS.map((c) => ({ ...c, ag: agentePorSlug(c.agente) }));
 const esHoy = (f) => f === new Date().toISOString().slice(0, 10);
+
+/* ── Gráficas del panel ─────────────────────────────────────────────────────
+   A diferencia del proyecto de referencia, donde las cuatro gráficas son
+   arreglos escritos a mano, aquí salen de `CITAS` — o sea de Supabase. Si el
+   equipo tiene pocas citas, se van a ver pocas: es el dato, no un error.
+
+   Chart.js se carga por CDN en panel-director.html. Si no cargó, cada tarjeta
+   dice por qué en vez de dejar un hueco blanco.                              */
+const GRAFICAS = [];
+
+function tokenColor(nombre, respaldo) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(nombre).trim();
+  return v || respaldo;
+}
+
+function ejesSobrios(color) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { color, precision: 0 }, grid: { color: 'rgba(0,0,0,.06)' } },
+    },
+  };
+}
+
+function buildGraficasDirector() {
+  // Al cambiar de sección el HTML se reemplaza entero y los <canvas> viejos
+  // desaparecen; sin destruirlas antes, Chart.js conserva las instancias y
+  // vuelve a dibujar sobre lienzos que ya no están en el documento.
+  while (GRAFICAS.length) { try { GRAFICAS.pop().destroy(); } catch (e) { /* ya no existía */ } }
+
+  const lienzos = ['gCitasMes', 'gEstados', 'gPorAgente', 'gRamos'].map((id) => $('#' + id));
+  if (!lienzos[0]) return;
+
+  if (typeof Chart === 'undefined') {
+    lienzos.forEach((c) => c && c.parentElement.replaceChildren(
+      Object.assign(document.createElement('p'), {
+        className: 'admin-vacio',
+        textContent: 'No se pudo cargar Chart.js. Revisa la conexión.',
+      })));
+    return;
+  }
+
+  const azul    = tokenColor('--vaxti-azul', '#00224f');
+  const naranja = tokenColor('--vaxti-naranja', '#fe6031');
+  const tinta   = tokenColor('--t2', '#5a6478');
+  const citas   = CITAS;
+
+  const vacio = (canvas, msg) => canvas.parentElement.replaceChildren(
+    Object.assign(document.createElement('p'), { className: 'admin-vacio', textContent: msg }));
+
+  /* 1 · Citas por mes — los 6 meses hasta hoy, incluidos los que van en cero.
+         Sin rellenar los huecos, tres citas salteadas parecen una tendencia. */
+  const meses = [];
+  const hoy = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    meses.push({
+      clave: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      etiqueta: ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
+                 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][d.getMonth()],
+    });
+  }
+  GRAFICAS.push(new Chart(lienzos[0], {
+    type: 'line',
+    data: {
+      labels: meses.map((m) => m.etiqueta),
+      datasets: [{
+        data: meses.map((m) => citas.filter((c) => c.fecha.slice(0, 7) === m.clave).length),
+        borderColor: naranja,
+        backgroundColor: 'rgba(254,96,49,.10)',
+        fill: true, tension: .35,
+        pointBackgroundColor: naranja, pointRadius: 4,
+      }],
+    },
+    options: ejesSobrios(tinta),
+  }));
+
+  /* 2 · Estados — dona. Solo los estados que existen; una leyenda con cuatro
+         ceros no dice nada. */
+  const porEstado = {};
+  citas.forEach((c) => { porEstado[c.estado] = (porEstado[c.estado] || 0) + 1; });
+  const estados = Object.keys(porEstado);
+  if (!estados.length) vacio(lienzos[1], 'Todavía no hay citas.');
+  else GRAFICAS.push(new Chart(lienzos[1], {
+    type: 'doughnut',
+    data: {
+      labels: estados.map((e) => (ETIQUETA_ESTADO[e] || { txt: e }).txt),
+      datasets: [{
+        data: estados.map((e) => porEstado[e]),
+        backgroundColor: [naranja, azul, '#4caf82', '#8892a4', '#e05252'],
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: { legend: { position: 'bottom', labels: { color: tinta, font: { size: 11 }, boxWidth: 12 } } },
+    },
+  }));
+
+  /* 3 · Citas por agente — barras horizontales: los nombres completos no caben
+         en el eje X de un móvil. */
+  if (!AGENTES.length) vacio(lienzos[2], 'Todavía no hay agentes.');
+  else GRAFICAS.push(new Chart(lienzos[2], {
+    type: 'bar',
+    data: {
+      labels: AGENTES.map((a) => a.nombre),
+      datasets: [{
+        data: AGENTES.map((a) => citas.filter((c) => c.agente === a.slug).length),
+        backgroundColor: azul, borderRadius: 4, barThickness: 18,
+      }],
+    },
+    options: { ...ejesSobrios(tinta), indexAxis: 'y' },
+  }));
+
+  /* 4 · Ramos — de `ramo_interes`, o sea lo que el cliente vino a preguntar,
+         no lo que el agente dice que vende. */
+  const porRamo = {};
+  citas.forEach((c) => { if (c.ramo) porRamo[c.ramo] = (porRamo[c.ramo] || 0) + 1; });
+  const ramos = Object.keys(porRamo).sort((a, b) => porRamo[b] - porRamo[a]);
+  if (!ramos.length) vacio(lienzos[3], 'Ninguna cita trae ramo de interés.');
+  else GRAFICAS.push(new Chart(lienzos[3], {
+    type: 'bar',
+    data: {
+      labels: ramos.map((r) => (RAMOS[r] || {}).label || r),
+      datasets: [{ data: ramos.map((r) => porRamo[r]), backgroundColor: naranja, borderRadius: 4 }],
+    },
+    options: ejesSobrios(tinta),
+  }));
+}
 
 const ETIQUETA_ESTADO = {
   pendiente:  { txt: 'Por confirmar', clase: 'pill-warn' },
@@ -1286,9 +1476,11 @@ async function initPanelDirector() {
   const sesion = await guardPanel('director');
   if (!sesion) return;
 
+  await cargarDatosDirector(sesion);
+
   $('#pdQuien').innerHTML = `<b>${esc(sesion.usuario.nombre)}</b>${sesion.demo ? ' · demo' : ''}`;
 
-  const pendientes = RESENAS_PENDIENTES.length;
+  const pendientes = RESENAS_MOD.length;
   if (pendientes) $('#pdBadgeResenas').textContent = pendientes;
   $('#pdBadgePost').textContent = '2';
 
@@ -1297,8 +1489,9 @@ async function initPanelDirector() {
       .forEach((b) => b.classList.toggle('activo', b.dataset.sec === sec));
     main.innerHTML = (SECCIONES_DIRECTOR[sec] || (() => '<p>Sección en construcción.</p>'))();
     main.scrollTop = 0;
-    if (sec === 'resenas') activarModeracion();
-    if (sec === 'agentes') activarGestionAgentes();
+    if (sec === 'resenas')   activarModeracion();
+    if (sec === 'agentes')   activarGestionAgentes();
+    if (sec === 'dashboard') buildGraficasDirector();
   };
 
   $$('[data-sec]').forEach((b) => {
@@ -1337,9 +1530,35 @@ const SECCIONES_DIRECTOR = {
         ${kpi('fa-calendar-check', 'Citas del mes', mes.length, `${citas.filter((c) => c.estado === 'pendiente').length} por confirmar`)}
         ${kpi('fa-users', 'Agentes activos', AGENTES.length, `${AGENTES.filter((a) => a.disponible).length} disponibles hoy`)}
         ${kpi('fa-star', 'Calificación', califProm.toFixed(2), 'promedio del equipo')}
-        ${kpi('fa-clock', 'Reseñas por aprobar', RESENAS_PENDIENTES.length, 'esperando tu revisión', RESENAS_PENDIENTES.length ? 'alerta' : '')}
+        ${kpi('fa-clock', 'Reseñas por aprobar', RESENAS_MOD.length, 'esperando tu revisión', RESENAS_MOD.length ? 'alerta' : '')}
         ${kpi('fa-file-contract', 'Pólizas colocadas', AGENTES.reduce((s, a) => s + (a.num_citas || 0), 0), 'histórico')}
         ${kpi('fa-coins', 'Prima del equipo', '$' + (prima / 1000).toFixed(0) + 'k', 'estimada anual')}
+      </div>
+
+      <div class="graficas-grid">
+        <section class="admin-card grafica-card">
+          <h2>Citas por mes</h2>
+          <p class="grafica-sub">Últimos 6 meses</p>
+          <div class="grafica-lienzo"><canvas id="gCitasMes"></canvas></div>
+        </section>
+
+        <section class="admin-card grafica-card">
+          <h2>En qué estado están</h2>
+          <p class="grafica-sub">Todas las citas del equipo</p>
+          <div class="grafica-lienzo"><canvas id="gEstados"></canvas></div>
+        </section>
+
+        <section class="admin-card grafica-card">
+          <h2>Citas por agente</h2>
+          <p class="grafica-sub">Quién está recibiendo la demanda</p>
+          <div class="grafica-lienzo"><canvas id="gPorAgente"></canvas></div>
+        </section>
+
+        <section class="admin-card grafica-card">
+          <h2>Ramos más solicitados</h2>
+          <p class="grafica-sub">Lo que la gente viene a preguntar</p>
+          <div class="grafica-lienzo"><canvas id="gRamos"></canvas></div>
+        </section>
       </div>
 
       <div class="admin-cols">
@@ -1455,11 +1674,11 @@ const SECCIONES_DIRECTOR = {
       <h1 class="admin-page-title">Reseñas</h1>
       <p class="admin-page-sub">Nada se publica sin que tú lo apruebes</p>
       <div class="tabs-bar">
-        <button class="tab-btn activo" data-tab="pend">Pendientes (${RESENAS_PENDIENTES.length})</button>
+        <button class="tab-btn activo" data-tab="pend">Pendientes (${RESENAS_MOD.length})</button>
         <button class="tab-btn" data-tab="apro">Publicadas (${aprobadas.length})</button>
       </div>
       <div class="tab-panel activo" id="tab-pend">
-        ${RESENAS_PENDIENTES.length ? RESENAS_PENDIENTES.map((r) => `
+        ${RESENAS_MOD.length ? RESENAS_MOD.map((r) => `
           <article class="resena-mod" data-resena="${esc(r.id)}">
             <div class="resena-mod-head">
               <div>
