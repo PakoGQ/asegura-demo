@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Asegura — Encuentra tu agente de seguros en Guadalajara</title>
+  <meta name="description" content="Agentes de seguros con cédula vigente en Guadalajara. Ve su perfil, sus ramos y sus reseñas, y agenda una asesoría sin costo en oficina, a domicilio o por videollamada." />
+  <meta name="theme-color" content="#ee7203" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+</head>
+<!-- Sin `page-mobile-min-nav`: esa clase activa el nav discreto del proyecto de referencia,
+     que en móvil esconde el hamburger y deja solo un botón ⋮. Aquí el menú
+     tiene que estar a la vista. -->
+<body>
+
+<!-- ── Navegación ── -->
+<nav class="nav" id="mainNav">
+  <div class="nav-brand">
+    <a href="index.html" class="nav-logo" aria-label="Inicio">
+      <span class="logo-marca"><i class="fas fa-shield-heart"></i></span>
+    </a>
+    <span class="nav-brand-title" data-marca>Asegura</span>
+  </div>
+  <div class="nav-center">
+    <span class="nav-title" data-marca>Asegura</span>
+    <span class="nav-tagline" data-tagline>Tu agente de seguros, cerca de ti</span>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active">Inicio</a></li>
+      <li><a href="agentes.html">Agentes</a></li>
+      <li><a href="ramos.html">Seguros</a></li>
+      <li><a href="unete.html">Únete</a></li>
+    </ul>
+  </div>
+  <div class="nav-cta">
+    <button class="login-key" onclick="openModal('loginModal')" aria-label="Acceso de agentes" title="Acceso">
+      <i class="fas fa-user-lock"></i>
+    </button>
+    <button class="nav-menu-btn" id="navMenuBtn" aria-label="Menú" aria-controls="mobileDrawer" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- ── Drawer móvil ── -->
+<div class="mobile-drawer-overlay" id="mobileDrawerOverlay" aria-hidden="true"></div>
+<aside class="mobile-drawer" id="mobileDrawer" aria-hidden="true">
+  <div class="mobile-drawer-head">
+    <span class="mobile-drawer-title">Menú</span>
+    <button class="mobile-drawer-close" id="mobileDrawerClose" aria-label="Cerrar menú">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <ul class="mobile-drawer-links">
+    <li><a href="index.html"><i class="fas fa-home"></i> Inicio</a></li>
+    <li><a href="agentes.html"><i class="fas fa-users"></i> Agentes</a></li>
+    <li><a href="ramos.html"><i class="fas fa-shield-halved"></i> Tipos de seguro</a></li>
+    <li><a href="unete.html"><i class="fas fa-id-badge"></i> Únete al equipo</a></li>
+    <li><a href="legal.html"><i class="fas fa-scale-balanced"></i> Legal</a></li>
+  </ul>
+</aside>
+
+<!-- ── Hero ── -->
+<section class="hero" id="hero">
+  <div class="hero-slides" id="heroSlides"></div>
+</section>
+<div class="hero-dots-wrap"><div class="hero-dots" id="heroDots"></div></div>
+
+<!-- ── Chips de zona (móvil) ── -->
+<div class="city-bar" id="zonaChips"></div>
+
+<!-- ── Buscador ── -->
+<div class="search-bar-wrap">
+  <button class="search-bar-toggle" id="searchToggle" aria-label="Buscar" aria-expanded="false">
+    <i class="fas fa-search"></i>
+  </button>
+  <form class="search-bar" id="searchForm">
+    <i class="fas fa-search" style="color:var(--t3);font-size:.9rem"></i>
+    <input type="text" id="searchInput" placeholder="Busca por nombre del agente…" autocomplete="off" />
+    <div class="search-divider"></div>
+    <div class="search-filter">
+      <i class="fas fa-shield-halved" style="font-size:.75rem"></i>
+      <select id="searchRamo" aria-label="Tipo de seguro"></select>
+    </div>
+    <div class="search-divider"></div>
+    <div class="search-filter">
+      <i class="fas fa-location-dot" style="font-size:.75rem"></i>
+      <select id="searchZona" aria-label="Zona"></select>
+    </div>
+    <button type="submit" class="btn btn-acento">Buscar</button>
+  </form>
+</div>
+
+<!-- ── Barra de confianza ── -->
+<div class="stats-bar">
+  <div class="stat-item">
+    <span class="stat-pulse"></span>
+    <strong class="stat-num" id="statsCount">4</strong>&nbsp;agentes en Guadalajara
+  </div>
+  <div class="stat-item">
+    <i class="fas fa-id-card"></i> Cédula <strong class="stat-num">verificada</strong>
+  </div>
+  <div class="stat-item">
+    <i class="fas fa-comment-dots"></i> Asesoría <strong class="stat-num">sin costo</strong>
+  </div>
+  <div class="stat-item">
+    <i class="fas fa-star"></i> Reseñas <strong class="stat-num">reales</strong>
+  </div>
+</div>
+
+<!-- ── Galería de agentes ── -->
+<section class="gal-section">
+  <div class="gal-header">
+    <div>
+      <p class="section-label">Nuestro equipo en Guadalajara</p>
+      <h2 class="gal-title">Conoce a tu <span class="acento">agente</span></h2>
+    </div>
+    <a href="agentes.html" class="btn btn-outline btn-sm">
+      Ver todos <i class="fas fa-arrow-right"></i>
+    </a>
+  </div>
+  <div class="gal-grid" id="agenteGallery"></div>
+</section>
+
+<!-- ── Cómo funciona ── -->
+<section class="section seccion-como">
+  <div class="como-wrap">
+    <div class="text-center">
+      <p class="section-label">Simple y sin compromiso</p>
+      <h2 class="como-titulo">¿Cómo <span class="acento">funciona?</span></h2>
+      <div class="divider"></div>
+    </div>
+    <div class="how-steps-grid">
+      <div class="paso">
+        <div class="paso-num">1</div>
+        <div class="paso-icono"><i class="fas fa-magnifying-glass-location"></i></div>
+        <h4>Busca cerca de ti</h4>
+        <p>Filtra por zona y por tipo de seguro. Ve quién tiene cédula verificada y qué dicen sus clientes.</p>
+      </div>
+      <div class="paso destacado">
+        <div class="paso-num">2</div>
+        <div class="paso-icono"><i class="fas fa-calendar-check"></i></div>
+        <h4>Agenda tu asesoría</h4>
+        <p>Eliges día, hora y dónde: en su oficina, en tu casa o por videollamada. Sin costo.</p>
+      </div>
+      <div class="paso">
+        <div class="paso-num">3</div>
+        <div class="paso-icono"><i class="fas fa-handshake"></i></div>
+        <h4>Te explican de verdad</h4>
+        <p>Un agente con cédula te dice qué cubre cada póliza y qué no, antes de que firmes nada.</p>
+      </div>
+    </div>
+    <div class="como-acciones">
+      <a href="agentes.html" class="btn btn-acento"><i class="fas fa-users"></i> Ver agentes disponibles</a>
+      <a href="#" data-wa-central target="_blank" rel="noopener" class="btn btn-wa">
+        <i class="fab fa-whatsapp"></i> Preguntar por WhatsApp
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Por qué elegirnos ── -->
+<section class="section">
+  <div class="text-center mb-3">
+    <p class="section-label">Por qué con nosotros</p>
+    <h2 class="seccion-titulo">Un agente, no un <span class="acento">call center</span></h2>
+    <div class="divider"></div>
+  </div>
+  <div class="ventajas-grid">
+    <div class="ventaja">
+      <div class="ventaja-icono"><i class="fas fa-id-card"></i></div>
+      <h4>Cédula vigente</h4>
+      <p>Cada agente muestra su cédula A1 o A2 de la CNSF. La verificamos antes de publicar el perfil.</p>
+    </div>
+    <div class="ventaja">
+      <div class="ventaja-icono"><i class="fas fa-location-dot"></i></div>
+      <h4>En tu zona</h4>
+      <p>Alguien que puede ir a tu casa o a tu negocio, no una línea telefónica a mil kilómetros.</p>
+    </div>
+    <div class="ventaja">
+      <div class="ventaja-icono"><i class="fas fa-star"></i></div>
+      <h4>Reseñas verificadas</h4>
+      <p>Solo escribe quien tuvo una cita. Las reseñas se revisan antes de publicarse.</p>
+    </div>
+    <div class="ventaja">
+      <div class="ventaja-icono"><i class="fas fa-user-shield"></i></div>
+      <h4>La misma persona siempre</h4>
+      <p>Quien te vende es quien te atiende el día del siniestro. Con nombre, cara y teléfono.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA para agentes ── -->
+<section class="cta-banner">
+  <p class="section-label">Para agentes</p>
+  <h2>¿Tienes cédula y quieres más citas? <span class="acento">Únete al equipo</span></h2>
+  <p class="cta-desc">Publica tu perfil, administra tu agenda y recibe clientes que
+     te buscaron a ti. Sin cuota durante la beta.</p>
+  <a href="unete.html" class="btn btn-acento btn-lg"><i class="fas fa-id-badge"></i> Quiero postularme</a>
+</section>
+
+<!-- ── FAQ ── -->
+<section class="section">
+  <div class="text-center mb-3">
+    <p class="section-label">Dudas frecuentes</p>
+    <h2 class="seccion-titulo">Lo que <span class="acento">siempre preguntan</span></h2>
+    <div class="divider"></div>
+  </div>
+  <div class="faq-lista">
+    <details>
+      <summary>¿Cuánto cuesta la asesoría?</summary>
+      <p>Nada. El agente cobra comisión de la aseguradora solo si contratas. La cita
+         es para que entiendas tus opciones, y puedes no contratar nada.</p>
+    </details>
+    <details>
+      <summary>¿Me van a estar llamando después?</summary>
+      <p>El agente te contacta para confirmar la cita. Si después de la asesoría no
+         quieres seguir, se lo dices y ahí queda.</p>
+    </details>
+    <details>
+      <summary>¿Qué es la cédula A1 o A2?</summary>
+      <p>Es la licencia que otorga la Comisión Nacional de Seguros y Fianzas para
+         vender seguros en México. Sin ella, nadie puede asesorarte ni venderte una
+         póliza legalmente. Todos los perfiles la muestran.</p>
+    </details>
+    <details>
+      <summary>¿Puedo escoger a otro agente si no me convence?</summary>
+      <p>Sí. No hay exclusividad: agendas con quien quieras y las veces que quieras.</p>
+    </details>
+    <details>
+      <summary>¿Atienden fuera de Guadalajara?</summary>
+      <p>Cada perfil indica su zona y hasta dónde se traslada. Para lugares lejanos,
+         casi todos atienden por videollamada.</p>
+    </details>
+    <details>
+      <summary>¿Qué pasa con mis datos?</summary>
+      <p>Tu nombre y tu WhatsApp los ve únicamente el agente con quien agendaste.
+         No se publican en el sitio ni se comparten con nadie más.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer class="footer">
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="nav-logo"><span class="logo-marca"><i class="fas fa-shield-heart"></i></span></div>
+      <p>Agentes de seguros con cédula vigente en Guadalajara. Encuentra al tuyo,
+         agenda una asesoría y entiende tu póliza antes de firmarla.</p>
+    </div>
+    <div>
+      <p class="footer-heading">Plataforma</p>
+      <ul class="footer-links">
+        <li><a href="agentes.html">Agentes</a></li>
+        <li><a href="ramos.html">Tipos de seguro</a></li>
+        <li><a href="unete.html">Únete al equipo</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="footer-heading">Para agentes</p>
+      <ul class="footer-links">
+        <li><a href="panel-agente.html">Mi panel</a></li>
+        <li><a href="unete.html">Postularme</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="footer-heading">Legal</p>
+      <ul class="footer-links">
+        <li><a href="terminos.html">Términos de uso</a></li>
+        <li><a href="privacidad.html">Privacidad</a></li>
+        <li><a href="cookies.html">Cookies</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 · Guadalajara, Jalisco, México</span>
+    <span>Los agentes cuentan con cédula vigente ante la CNSF</span>
+  </div>
+</footer>
+
+<!-- ── Botón flotante ── -->
+<div class="float-btns">
+  <a href="#" data-wa-central target="_blank" rel="noopener" class="float-btn float-btn-wa" aria-label="WhatsApp">
+    <i class="fab fa-whatsapp"></i>
+  </a>
+</div>
+
+<!-- ── Modal de acceso ── -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Acceso de agentes</h3>
+      <button class="modal-close" onclick="closeModal('loginModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <p class="modal-sub">Si eres cliente no necesitas cuenta: agenda directo desde el perfil del agente.</p>
+    <div id="loginError" class="login-error">
+      <i class="fas fa-circle-exclamation"></i> <span></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Correo</label>
+      <input type="email" class="form-input" id="loginEmail" autocomplete="username" placeholder="tu@correo.mx" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña</label>
+      <div class="pass-wrap">
+        <input type="password" class="form-input" id="loginPass" placeholder="••••••••"
+               onkeydown="if(event.key==='Enter')doLogin()" autocomplete="current-password" />
+        <button type="button" class="pass-toggle" aria-label="Mostrar contraseña" onclick="togglePassword(this)">
+          <i class="fas fa-eye"></i>
+        </button>
+      </div>
+    </div>
+    <button class="btn btn-acento w-full" onclick="doLogin()">
+      <i class="fas fa-right-to-bracket"></i> Entrar
+    </button>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ── Nav inferior (móvil) ── -->
+<nav class="bottom-nav" aria-label="Navegación principal">
+  <a href="index.html" class="bottom-nav-item active"><i class="fas fa-home"></i><span>Inicio</span></a>
+  <a href="agentes.html" class="bottom-nav-item"><i class="fas fa-users"></i><span>Agentes</span></a>
+  <a href="ramos.html" class="bottom-nav-item"><i class="fas fa-shield-halved"></i><span>Seguros</span></a>
+  <a href="#" class="bottom-nav-item" onclick="event.preventDefault();openModal('loginModal')"><i class="fas fa-user"></i><span>Cuenta</span></a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

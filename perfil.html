@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Perfil del agente — Asegura</title>
+  <meta name="theme-color" content="#ee7203" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+</head>
+<body id="page-perfil">
+
+<!-- ── Navegación ── -->
+<nav class="nav" id="mainNav">
+  <div class="nav-brand">
+    <a href="index.html" class="nav-logo" aria-label="Inicio">
+      <span class="logo-marca"><i class="fas fa-shield-heart"></i></span>
+    </a>
+    <span class="nav-brand-title" data-marca>Asegura</span>
+  </div>
+  <div class="nav-center">
+    <ul class="nav-links">
+      <li><a href="index.html">Inicio</a></li>
+      <li><a href="agentes.html" class="active">Agentes</a></li>
+      <li><a href="ramos.html">Seguros</a></li>
+      <li><a href="unete.html">Únete</a></li>
+    </ul>
+  </div>
+  <div class="nav-cta">
+    <button class="login-key" onclick="openModal('loginModal')" aria-label="Acceso de agentes"><i class="fas fa-user-lock"></i></button>
+    <button class="nav-menu-btn" id="navMenuBtn" aria-label="Menú" aria-controls="mobileDrawer" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<div class="mobile-drawer-overlay" id="mobileDrawerOverlay" aria-hidden="true"></div>
+<aside class="mobile-drawer" id="mobileDrawer" aria-hidden="true">
+  <div class="mobile-drawer-head">
+    <span class="mobile-drawer-title">Menú</span>
+    <button class="mobile-drawer-close" id="mobileDrawerClose" aria-label="Cerrar menú"><i class="fas fa-times"></i></button>
+  </div>
+  <ul class="mobile-drawer-links">
+    <li><a href="index.html"><i class="fas fa-home"></i> Inicio</a></li>
+    <li><a href="agentes.html"><i class="fas fa-users"></i> Agentes</a></li>
+    <li><a href="ramos.html"><i class="fas fa-shield-halved"></i> Tipos de seguro</a></li>
+    <li><a href="unete.html"><i class="fas fa-id-badge"></i> Únete al equipo</a></li>
+    <li><a href="legal.html"><i class="fas fa-scale-balanced"></i> Legal</a></li>
+  </ul>
+</aside>
+
+<!-- Todo el contenido lo pinta app.js desde ?a=<slug> -->
+<main id="perfilRoot">
+  <div class="perfil-cargando"><i class="fas fa-spinner fa-spin"></i> Cargando perfil…</div>
+</main>
+
+<!-- ── Modal de agendado ── -->
+<div class="modal-overlay" id="citaModal">
+  <div class="modal modal-cita" id="citaBody"></div>
+</div>
+
+<!-- ── Visor de galería a pantalla completa ── -->
+<div class="fullscreen-viewer" id="fsViewer">
+  <button class="fs-close" onclick="cerrarFullscreen()" aria-label="Cerrar"><i class="fas fa-times"></i></button>
+  <button class="fs-nav fs-prev" onclick="navFullscreen(-1)" aria-label="Anterior"><i class="fas fa-chevron-left"></i></button>
+  <img id="fsImg" src="" alt="" />
+  <button class="fs-nav fs-next" onclick="navFullscreen(1)" aria-label="Siguiente"><i class="fas fa-chevron-right"></i></button>
+  <span class="fs-contador" id="fsContador"></span>
+</div>
+
+<!-- ── Modal de acceso ── -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Acceso de agentes</h3>
+      <button class="modal-close" onclick="closeModal('loginModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <p class="modal-sub">Si eres cliente no necesitas cuenta: agenda aquí mismo.</p>
+    <div id="loginError" class="login-error"><i class="fas fa-circle-exclamation"></i> <span></span></div>
+    <div class="form-group">
+      <label class="form-label">Correo</label>
+      <input type="email" class="form-input" id="loginEmail" autocomplete="username" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña</label>
+      <div class="pass-wrap">
+        <input type="password" class="form-input" id="loginPass" onkeydown="if(event.key==='Enter')doLogin()" autocomplete="current-password" />
+        <button type="button" class="pass-toggle" onclick="togglePassword(this)"><i class="fas fa-eye"></i></button>
+      </div>
+    </div>
+    <button class="btn btn-acento w-full" onclick="doLogin()"><i class="fas fa-right-to-bracket"></i> Entrar</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<nav class="bottom-nav" aria-label="Navegación principal">
+  <a href="index.html" class="bottom-nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
+  <a href="agentes.html" class="bottom-nav-item active"><i class="fas fa-users"></i><span>Agentes</span></a>
+  <a href="ramos.html" class="bottom-nav-item"><i class="fas fa-shield-halved"></i><span>Seguros</span></a>
+  <a href="#" class="bottom-nav-item" onclick="event.preventDefault();openModal('loginModal')"><i class="fas fa-user"></i><span>Cuenta</span></a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

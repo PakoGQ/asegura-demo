@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Mi panel — Asegura</title>
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+</head>
+<body class="panel-page panel-agente">
+
+<div class="panel-topbar">
+  <div class="panel-marca">
+    <span class="logo-marca"><i class="fas fa-shield-heart"></i></span>
+    <span data-marca>Asegura</span>
+  </div>
+  <div class="panel-topbar-der">
+    <!-- El toggle de disponibilidad es lo que el agente más toca en el día -->
+    <button class="toggle-disp" id="paToggle" aria-pressed="false">
+      <span class="toggle-punto"></span><span id="paToggleTxt">Disponible</span>
+    </button>
+    <span class="panel-quien" id="paQuien"></span>
+    <button class="btn btn-ghost btn-sm" onclick="salirPanel()">
+      <i class="fas fa-right-from-bracket"></i> Salir
+    </button>
+  </div>
+</div>
+
+<!-- Barra fija en móvil: el toggle siempre a la mano -->
+<div class="mobile-disp-bar" id="paBarraMovil">
+  <span id="paBarraTxt">Estás disponible para citas</span>
+  <button class="toggle-disp chico" id="paToggleMovil" aria-pressed="false">
+    <span class="toggle-punto"></span><span id="paToggleMovilTxt">Sí</span>
+  </button>
+</div>
+
+<div class="admin-layout">
+  <aside class="admin-sidebar agente-sidebar" id="paSidebar">
+    <div class="agente-profile-mini" id="paMini"></div>
+
+    <p class="admin-nav-section">Mi trabajo</p>
+    <button class="admin-nav-item activo" data-sec="inicio"><i class="fas fa-chart-simple"></i> Mi día</button>
+    <button class="admin-nav-item" data-sec="citas"><i class="fas fa-calendar-days"></i> Mis citas
+      <span class="nav-badge" id="paBadgeCitas"></span></button>
+    <button class="admin-nav-item" data-sec="agenda"><i class="fas fa-clock"></i> Disponibilidad</button>
+    <button class="admin-nav-item" data-sec="contenido"><i class="fas fa-images"></i> Mi contenido</button>
+
+    <p class="admin-nav-section">Mi perfil</p>
+    <button class="admin-nav-item" data-sec="perfil"><i class="fas fa-id-card"></i> Editar perfil</button>
+    <a class="admin-nav-item" id="paVerPerfil" href="#"><i class="fas fa-arrow-up-right-from-square"></i> Ver mi perfil</a>
+    <a class="admin-nav-item" href="cartera/agente/dashboard.html"><i class="fas fa-folder-open"></i> Mi cartera</a>
+
+    <p class="admin-nav-section">Sistema</p>
+    <button class="admin-nav-item" data-sec="config"><i class="fas fa-gear"></i> Configuración</button>
+  </aside>
+
+  <main class="admin-main agente-main" id="paMain">
+    <div class="perfil-cargando"><i class="fas fa-spinner fa-spin"></i> Cargando…</div>
+  </main>
+</div>
+
+<nav class="panel-bottom-nav">
+  <button class="panel-bottom-nav-item activo" data-sec="inicio"><i class="fas fa-chart-simple"></i><span>Mi día</span></button>
+  <button class="panel-bottom-nav-item" data-sec="citas"><i class="fas fa-calendar-days"></i><span>Citas</span></button>
+  <button class="panel-bottom-nav-item" data-sec="agenda"><i class="fas fa-clock"></i><span>Agenda</span></button>
+  <button class="panel-bottom-nav-item" data-sec="perfil"><i class="fas fa-id-card"></i><span>Perfil</span></button>
+</nav>
+
+<!-- Reseña de cliente: privada entre el equipo y el Director -->
+<div class="modal-overlay" id="clienteModal">
+  <div class="modal modal-cita" id="clienteBody"></div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

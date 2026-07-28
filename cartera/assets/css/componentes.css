@@ -1,0 +1,522 @@
+/* ==========================================================================
+   componentes.css — Header, navegación, tarjetas, listas, gráficas, formularios.
+
+   Mobile-first: nav inferior en celular, superior en escritorio.
+   El movimiento es funcional: entra en secuencia lo que hay que leer en
+   secuencia, y se mueve al tocar lo que se puede tocar. Nada decorativo que
+   distraiga a alguien capturando una póliza en la calle.
+   ========================================================================== */
+
+/* ---------- Animaciones base ---------- */
+@keyframes surge      { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes entraLado  { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+@keyframes latido     { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.35); opacity: .55; } }
+@keyframes brillo     { from { background-position: -280px 0; } to { background-position: 280px 0; } }
+@keyframes creceBarra { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* Utilidad de entrada escalonada: se pasa --i por elemento. */
+.aparece {
+  animation: surge var(--medio) var(--curva) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* El escalonado se resuelve en CSS, no en JS: cualquier lista lo hereda sin
+   que la pantalla tenga que numerar sus filas. Un `style="--i:N"` en línea
+   sigue ganando cuando una pantalla necesita otro orden. */
+.lista li:nth-child(1)  { --i: 0; }
+.lista li:nth-child(2)  { --i: 1; }
+.lista li:nth-child(3)  { --i: 2; }
+.lista li:nth-child(4)  { --i: 3; }
+.lista li:nth-child(5)  { --i: 4; }
+.lista li:nth-child(6)  { --i: 5; }
+.lista li:nth-child(7)  { --i: 6; }
+.lista li:nth-child(8)  { --i: 7; }
+.lista li:nth-child(9)  { --i: 8; }
+.lista li:nth-child(10) { --i: 9; }
+.lista li:nth-child(n+11) { --i: 10; }
+
+.metricas > *:nth-child(1) { --i: 0; }
+.metricas > *:nth-child(2) { --i: 1; }
+.metricas > *:nth-child(3) { --i: 2; }
+.metricas > *:nth-child(4) { --i: 3; }
+
+.leyenda li:nth-child(1) { --i: 0; }
+.leyenda li:nth-child(2) { --i: 1; }
+.leyenda li:nth-child(3) { --i: 2; }
+.leyenda li:nth-child(4) { --i: 3; }
+.leyenda li:nth-child(5) { --i: 4; }
+.leyenda li:nth-child(6) { --i: 5; }
+.leyenda li:nth-child(n+7) { --i: 6; }
+
+/* ---------- Header ---------- */
+.encabezado {
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.encabezado-inner {
+  max-width: var(--ancho-max);
+  margin: 0 auto;
+  padding: .7rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.encabezado .marca {
+  font-weight: 750;
+  font-size: 1rem;
+  margin-right: auto;
+  letter-spacing: -.02em;
+}
+.encabezado .marca span {
+  background: var(--degradado-marca);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.encabezado .quien { font-size: .8rem; color: var(--texto-suave); text-align: right; line-height: 1.2; }
+.encabezado .quien b { display: block; color: var(--texto); font-size: .85rem; }
+
+/* ---------- Navegación ---------- */
+.nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(255, 255, 255, .94);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-top: 1px solid var(--borde);
+  display: flex;
+  z-index: 30;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.nav a {
+  flex: 1;
+  padding: .5rem .25rem;
+  text-align: center;
+  font-size: .68rem;
+  color: var(--texto-suave);
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: var(--alto-nav);
+  justify-content: center;
+  position: relative;
+  transition: color var(--rapido) var(--curva);
+  -webkit-tap-highlight-color: transparent;
+}
+.nav a .icono {
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: transform var(--medio) var(--curva);
+}
+.nav a:active .icono { transform: scale(.86); }
+.nav a.activo { color: var(--acento); font-weight: 650; }
+.nav a.activo .icono { transform: translateY(-1px) scale(1.12); }
+/* Subrayado que crece desde el centro al cambiar de pestaña */
+.nav a.activo::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  width: 34px; height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--degradado-marca);
+  transform: translateX(-50%) scaleX(0);
+  animation: creceBarra var(--medio) var(--curva) forwards;
+}
+
+@media (min-width: 780px) {
+  .nav {
+    position: static;
+    border-top: 0;
+    border-bottom: 1px solid var(--borde);
+    max-width: var(--ancho-max);
+    margin: 0 auto;
+    padding: 0;
+    backdrop-filter: none;
+    background: var(--superficie);
+  }
+  .nav a { flex: 0 0 auto; flex-direction: row; min-height: 48px; padding: 0 1.05rem; font-size: .86rem; }
+  .nav a:hover { color: var(--texto); }
+  .nav a.activo::after { top: auto; bottom: 0; width: 100%; border-radius: 3px 3px 0 0; }
+}
+
+/* ---------- Hero de dashboard ---------- */
+.hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radio);
+  background: var(--degradado-marca);
+  color: #fff;
+  padding: 1.1rem 1.15rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--sombra-acento);
+  animation: surge var(--lento) var(--curva) backwards;
+}
+/* Halo suave: le da profundidad al degradado sin cargar la vista */
+.hero::after {
+  content: '';
+  position: absolute;
+  top: -60%; right: -18%;
+  width: 260px; height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 68%);
+  pointer-events: none;
+}
+.hero .saludo { font-size: .78rem; text-transform: uppercase; letter-spacing: .09em; opacity: .82; }
+.hero .cifra { font-size: 2.1rem; font-weight: 750; line-height: 1.05; margin: .2rem 0 .1rem; font-variant-numeric: tabular-nums; }
+.hero .detalle { font-size: .88rem; opacity: .92; max-width: 46ch; }
+.hero .acciones { margin-top: .85rem; }
+.hero .btn {
+  background: rgba(255, 255, 255, .16);
+  border-color: rgba(255, 255, 255, .34);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+.hero .btn:hover { background: rgba(255, 255, 255, .26); }
+.hero .btn.claro { background: #fff; color: var(--acento-oscuro); border-color: #fff; }
+
+/* ---------- Tarjetas de métrica ---------- */
+.metricas {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: .6rem;
+  margin-bottom: 1rem;
+}
+@media (min-width: 780px) { .metricas { grid-template-columns: repeat(4, 1fr); } }
+
+.metrica {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: .8rem .85rem;
+  box-shadow: var(--sombra);
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--medio) var(--curva), box-shadow var(--medio) var(--curva);
+  animation: surge var(--medio) var(--curva) backwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+.metrica:hover { transform: translateY(-2px); box-shadow: var(--sombra-md); }
+/* Franja de estado: el color entra por la izquierda, no por el fondo */
+.metrica::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--borde-fuerte);
+}
+.metrica.riesgo::before { background: var(--riesgo); }
+.metrica.alerta::before { background: var(--alerta); }
+.metrica.acento::before { background: var(--degradado-marca); }
+.metrica .etiqueta { font-size: .7rem; color: var(--texto-suave); text-transform: uppercase; letter-spacing: .05em; }
+.metrica .valor { font-size: 1.45rem; font-weight: 750; font-variant-numeric: tabular-nums; margin-top: .15rem; letter-spacing: -.02em; }
+.metrica .pie { font-size: .74rem; color: var(--texto-suave); }
+.metrica.riesgo .valor { color: var(--riesgo); }
+.metrica.alerta .valor { color: var(--alerta); }
+
+/* ---------- Tarjeta genérica ---------- */
+.tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  margin-bottom: 1rem;
+  overflow: hidden;
+  animation: surge var(--medio) var(--curva) backwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+.tarjeta > header {
+  padding: .8rem .9rem;
+  border-bottom: 1px solid var(--borde);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.tarjeta > header h2 { margin: 0; font-size: .95rem; }
+.tarjeta > header .accion { margin-left: auto; }
+.tarjeta .cuerpo { padding: .9rem; }
+
+/* ---------- Listas ---------- */
+.lista { list-style: none; margin: 0; padding: 0; }
+.lista li {
+  padding: .8rem .9rem;
+  border-bottom: 1px solid var(--borde);
+  display: flex;
+  gap: .75rem;
+  align-items: flex-start;
+  position: relative;
+  transition: background var(--rapido) var(--curva);
+  animation: entraLado var(--medio) var(--curva) backwards;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+.lista li:last-child { border-bottom: 0; }
+.lista li:hover { background: var(--superficie-2); }
+.lista .principal { flex: 1; min-width: 0; }
+.lista .titulo { font-weight: 650; font-size: .92rem; }
+.lista .sub { font-size: .8rem; color: var(--texto-suave); }
+.lista .lateral { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lista .lateral .monto { font-weight: 700; font-size: .95rem; }
+
+/* Fila crítica: barra roja al costado, se lee sin leer */
+.lista li.critica { background: linear-gradient(90deg, var(--riesgo-suave) 0%, transparent 55%); }
+.lista li.critica::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--riesgo);
+}
+
+.vacio { padding: 2.25rem 1rem; text-align: center; color: var(--texto-suave); font-size: .88rem; }
+
+/* Punto que late: solo para lo que de verdad urge */
+.pulso {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--riesgo);
+  margin-right: .35rem;
+  animation: latido 1.8s ease-in-out infinite;
+}
+
+/* ---------- Badges ---------- */
+.badge {
+  display: inline-block;
+  padding: .14rem .5rem;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 650;
+  background: var(--fondo);
+  color: var(--texto-suave);
+  white-space: nowrap;
+  margin-right: .2rem;
+}
+.badge.ok     { background: var(--ok-suave);     color: var(--ok); }
+.badge.alerta { background: var(--alerta-suave); color: var(--alerta); }
+.badge.riesgo { background: var(--riesgo-suave); color: var(--riesgo); }
+.badge.info   { background: var(--info-suave);   color: var(--info); }
+.badge.marca  { background: var(--acento-suave); color: var(--acento-oscuro); }
+
+/* ---------- Botones ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  padding: .6rem .95rem;
+  border-radius: var(--radio-sm);
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: .88rem;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: none;
+  min-height: 42px;               /* objetivo táctil cómodo en campo */
+  transition: transform var(--rapido) var(--curva),
+              box-shadow var(--medio) var(--curva),
+              background var(--rapido) var(--curva);
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:hover { background: var(--superficie-2); }
+.btn:active { transform: scale(.96); }
+.btn.primario {
+  background: var(--degradado-marca);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--sombra-acento);
+}
+.btn.primario:hover { filter: brightness(1.06); }
+.btn.chico { min-height: 32px; padding: .28rem .6rem; font-size: .78rem; }
+.btn.bloque { width: 100%; }
+.btn[disabled] { opacity: .55; cursor: default; transform: none; }
+
+.acciones { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+/* ---------- Botón flotante de captura rápida ---------- */
+.fab {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(var(--alto-nav) + 1rem + env(safe-area-inset-bottom, 0px));
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  background: var(--degradado-marca);
+  color: #fff;
+  font-size: 1.35rem;
+  display: flex; align-items: center; justify-content: center;
+  text-decoration: none;
+  box-shadow: var(--sombra-acento);
+  z-index: 35;
+  animation: surge var(--lento) var(--curva) 260ms backwards;
+  transition: transform var(--medio) var(--curva);
+}
+.fab:hover { transform: scale(1.07) rotate(90deg); }
+.fab:active { transform: scale(.92); }
+
+@media (min-width: 780px) {
+  .fab { bottom: 1.5rem; right: 1.5rem; }
+}
+
+/* ---------- Filtros ---------- */
+.filtros {
+  display: flex;
+  gap: .5rem;
+  overflow-x: auto;
+  padding-bottom: .5rem;
+  margin-bottom: .5rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.filtros select, .filtros input {
+  flex: 0 0 auto;
+  padding: .5rem .6rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+  background: var(--superficie);
+  font-size: .85rem;
+  color: var(--texto);
+  min-height: 40px;
+  transition: border-color var(--rapido) var(--curva), box-shadow var(--rapido) var(--curva);
+}
+.filtros select:focus, .filtros input:focus {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+  outline: none;
+}
+.filtros input[type="search"] { flex: 1 1 160px; min-width: 140px; }
+
+/* ---------- Gráficas ---------- */
+.graficas {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+@media (min-width: 780px) { .graficas.dos { grid-template-columns: 1fr 1fr; } }
+
+.grafica-caja { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.grafica-caja svg { flex: 0 0 auto; overflow: visible; }
+
+/* Leyenda: la muestra de color hace de clave, el número manda a la derecha */
+.leyenda { list-style: none; margin: 0; padding: 0; flex: 1 1 150px; min-width: 140px; }
+.leyenda li {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .8rem;
+  padding: .18rem 0;
+  animation: entraLado var(--medio) var(--curva) backwards;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+.leyenda .muestra { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
+.leyenda .nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leyenda .dato { font-variant-numeric: tabular-nums; font-weight: 650; }
+
+/* Barras horizontales (ranking de agentes, vencimientos por mes) */
+.barras { display: flex; flex-direction: column; gap: .6rem; }
+.barra-fila { font-size: .82rem; }
+.barra-fila .cabeza { display: flex; gap: .5rem; margin-bottom: .25rem; }
+.barra-fila .cabeza .nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.barra-fila .cabeza .dato { font-variant-numeric: tabular-nums; color: var(--texto-suave); }
+.barra-pista {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--fondo);
+  overflow: hidden;
+}
+.barra-relleno {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--degradado-marca);
+  transform-origin: left center;
+  animation: creceBarra var(--lento) var(--curva) backwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* Anillo de progreso (SVG animado desde graficos.js) */
+.anillo-caja { display: flex; align-items: center; gap: .9rem; }
+.anillo-texto .valor { font-size: 1.5rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.anillo-texto .pie { font-size: .78rem; color: var(--texto-suave); }
+
+/* ---------- Formularios ---------- */
+.campo { margin-bottom: .85rem; }
+.campo label { display: block; font-size: .8rem; font-weight: 650; margin-bottom: .28rem; }
+.campo input, .campo select, .campo textarea {
+  width: 100%;
+  padding: .68rem .72rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+  font-size: 1rem;            /* 16px evita el zoom automático de iOS */
+  background: var(--superficie);
+  color: var(--texto);
+  font-family: inherit;
+  transition: border-color var(--rapido) var(--curva), box-shadow var(--rapido) var(--curva);
+}
+.campo input:focus, .campo select:focus, .campo textarea:focus {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-suave);
+  outline: none;
+}
+.campo textarea { min-height: 84px; resize: vertical; }
+.campos-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+
+/* ---------- Avisos ---------- */
+.aviso {
+  padding: .72rem .9rem;
+  border-radius: var(--radio-sm);
+  font-size: .86rem;
+  margin-bottom: .85rem;
+  animation: surge var(--medio) var(--curva);
+}
+.aviso.error { background: var(--riesgo-suave); color: var(--riesgo); }
+.aviso.exito { background: var(--ok-suave); color: var(--ok); }
+.aviso.info  { background: var(--info-suave); color: var(--info); }
+
+/* ---------- Login ---------- */
+.login-caja {
+  max-width: 390px;
+  margin: 10vh auto 0;
+  padding: 1.6rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra-md);
+  animation: surge var(--lento) var(--curva);
+  position: relative;
+  overflow: hidden;
+}
+/* Filo de marca en el borde superior de la tarjeta de acceso */
+.login-caja::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--degradado-marca);
+}
+.login-caja .marca { font-size: 1.35rem; font-weight: 750; margin-bottom: .25rem; letter-spacing: -.02em; }
+.login-caja .marca span {
+  background: var(--degradado-marca);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- Estados de carga ---------- */
+.cargando { padding: 2rem; text-align: center; color: var(--texto-suave); font-size: .88rem; }
+
+/* Esqueleto: en vez de un spinner, la forma de lo que va a llegar */
+.esqueleto { padding: .8rem .9rem; border-bottom: 1px solid var(--borde); }
+.esqueleto .linea {
+  height: 10px;
+  border-radius: 5px;
+  margin-bottom: .5rem;
+  background: linear-gradient(90deg, var(--fondo) 0%, #eef1f6 50%, var(--fondo) 100%);
+  background-size: 280px 100%;
+  animation: brillo 1.25s linear infinite;
+}
+.esqueleto .linea.corta { width: 45%; }
+.esqueleto .linea.media { width: 70%; }
+.esqueleto .linea:last-child { margin-bottom: 0; }

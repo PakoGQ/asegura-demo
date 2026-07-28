@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Agentes de seguros en Guadalajara — Asegura</title>
+  <meta name="description" content="Directorio de agentes de seguros con cédula vigente. Filtra por zona, tipo de seguro y disponibilidad, u ordena por cercanía a tu ubicación." />
+  <meta name="theme-color" content="#ee7203" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+</head>
+<body id="page-agentes">
+
+<!-- ── Navegación ── -->
+<nav class="nav" id="mainNav">
+  <div class="nav-brand">
+    <a href="index.html" class="nav-logo" aria-label="Inicio">
+      <span class="logo-marca"><i class="fas fa-shield-heart"></i></span>
+    </a>
+    <span class="nav-brand-title" data-marca>Asegura</span>
+  </div>
+  <div class="nav-center">
+    <ul class="nav-links">
+      <li><a href="index.html">Inicio</a></li>
+      <li><a href="agentes.html" class="active">Agentes</a></li>
+      <li><a href="ramos.html">Seguros</a></li>
+      <li><a href="unete.html">Únete</a></li>
+    </ul>
+  </div>
+  <div class="nav-cta">
+    <button class="login-key" onclick="openModal('loginModal')" aria-label="Acceso de agentes"><i class="fas fa-user-lock"></i></button>
+    <button class="nav-menu-btn" id="navMenuBtn" aria-label="Menú" aria-controls="mobileDrawer" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<div class="mobile-drawer-overlay" id="mobileDrawerOverlay" aria-hidden="true"></div>
+<aside class="mobile-drawer" id="mobileDrawer" aria-hidden="true">
+  <div class="mobile-drawer-head">
+    <span class="mobile-drawer-title">Menú</span>
+    <button class="mobile-drawer-close" id="mobileDrawerClose" aria-label="Cerrar menú"><i class="fas fa-times"></i></button>
+  </div>
+  <ul class="mobile-drawer-links">
+    <li><a href="index.html"><i class="fas fa-home"></i> Inicio</a></li>
+    <li><a href="agentes.html"><i class="fas fa-users"></i> Agentes</a></li>
+    <li><a href="ramos.html"><i class="fas fa-shield-halved"></i> Tipos de seguro</a></li>
+    <li><a href="unete.html"><i class="fas fa-id-badge"></i> Únete al equipo</a></li>
+    <li><a href="legal.html"><i class="fas fa-scale-balanced"></i> Legal</a></li>
+  </ul>
+</aside>
+
+<main class="dir-wrap">
+
+  <!-- ── Encabezado ── -->
+  <header class="dir-head">
+    <div>
+      <h1 class="dir-titulo">Agentes en <span class="acento">Guadalajara</span></h1>
+      <p class="dir-sub"><strong id="resultsCount">0</strong> agentes · asesoría sin costo</p>
+    </div>
+    <div class="dir-controles">
+      <button class="btn btn-outline btn-sm" id="btnCerca">
+        <i class="fas fa-location-crosshairs"></i> Cerca de mí
+      </button>
+      <select id="ordenSel" class="dir-select" aria-label="Ordenar por">
+        <option value="destacados">Destacados primero</option>
+        <option value="cerca">Más cercano</option>
+        <option value="rating">Mejor calificado</option>
+        <option value="citas">Más citas atendidas</option>
+        <option value="nuevos">Nuevos en el equipo</option>
+        <option value="experiencia">Más experiencia</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- ── Buscador ── -->
+  <div class="agentes-search-wrap">
+    <i class="fas fa-search agentes-search-icon"></i>
+    <input type="search" id="dirBusqueda" class="agentes-search-input"
+           placeholder="Busca por nombre, especialidad o zona…" autocomplete="off" />
+  </div>
+
+  <!-- ── Filtros ── -->
+  <div class="dir-filtros">
+    <select id="fZona" class="dir-select" aria-label="Zona"></select>
+    <select id="fRamo" class="dir-select" aria-label="Tipo de seguro"></select>
+    <select id="fModalidad" class="dir-select" aria-label="Modalidad de atención"></select>
+    <select id="fDisponible" class="dir-select" aria-label="Disponibilidad">
+      <option value="">Disponibles y ocupados</option>
+      <option value="si">Solo disponibles ahora</option>
+    </select>
+    <select id="fRating" class="dir-select" aria-label="Calificación mínima">
+      <option value="">Cualquier calificación</option>
+      <option value="4.5">4.5 o más</option>
+      <option value="4">4.0 o más</option>
+    </select>
+    <select id="fDistancia" class="dir-select oculto" aria-label="Distancia máxima">
+      <option value="">Cualquier distancia</option>
+      <option value="3">Hasta 3 km</option>
+      <option value="7">Hasta 7 km</option>
+      <option value="15">Hasta 15 km</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" id="btnLimpiar">Limpiar</button>
+  </div>
+
+  <!-- ── Chips de filtros activos ── -->
+  <div class="dir-chips" id="dirChips"></div>
+
+  <!-- ── Resultados ── -->
+  <div class="agentes-grid" id="dirGrid"></div>
+  <div class="dir-vacio oculto" id="dirVacio">
+    <i class="fas fa-user-slash"></i>
+    <h3>Ningún agente con esos filtros</h3>
+    <p>Prueba quitando alguno, o amplía la zona de búsqueda.</p>
+    <button class="btn btn-acento btn-sm" onclick="limpiarFiltros()">Quitar filtros</button>
+  </div>
+
+</main>
+
+<!-- ── Vista rápida ── -->
+<div class="modal-overlay" id="quickModal">
+  <div class="modal modal-quick" id="quickBody"></div>
+</div>
+
+<!-- ── Modal de acceso ── -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Acceso de agentes</h3>
+      <button class="modal-close" onclick="closeModal('loginModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <p class="modal-sub">Si eres cliente no necesitas cuenta: agenda directo desde el perfil.</p>
+    <div id="loginError" class="login-error"><i class="fas fa-circle-exclamation"></i> <span></span></div>
+    <div class="form-group">
+      <label class="form-label">Correo</label>
+      <input type="email" class="form-input" id="loginEmail" autocomplete="username" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña</label>
+      <div class="pass-wrap">
+        <input type="password" class="form-input" id="loginPass" onkeydown="if(event.key==='Enter')doLogin()" autocomplete="current-password" />
+        <button type="button" class="pass-toggle" onclick="togglePassword(this)"><i class="fas fa-eye"></i></button>
+      </div>
+    </div>
+    <button class="btn btn-acento w-full" onclick="doLogin()"><i class="fas fa-right-to-bracket"></i> Entrar</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<nav class="bottom-nav" aria-label="Navegación principal">
+  <a href="index.html" class="bottom-nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
+  <a href="agentes.html" class="bottom-nav-item active"><i class="fas fa-users"></i><span>Agentes</span></a>
+  <a href="ramos.html" class="bottom-nav-item"><i class="fas fa-shield-halved"></i><span>Seguros</span></a>
+  <a href="#" class="bottom-nav-item" onclick="event.preventDefault();openModal('loginModal')"><i class="fas fa-user"></i><span>Cuenta</span></a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

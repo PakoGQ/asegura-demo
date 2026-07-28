@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Panel del Director</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/componentes.css">
+</head>
+<body>
+  <main class="contenedor">
+    <div id="aviso" class="oculto"></div>
+    <div id="hero"></div>
+    <div id="metricas" class="metricas"></div>
+
+    <div class="graficas dos">
+      <section class="tarjeta" style="--i:1">
+        <header>
+          <h2>Prima por agente</h2>
+          <a class="accion btn chico" href="equipo.html">Ver equipo</a>
+        </header>
+        <div class="cuerpo" id="ranking"></div>
+      </section>
+      <section class="tarjeta" style="--i:2">
+        <header><h2>Cartera del equipo por ramo</h2></header>
+        <div class="cuerpo" id="dona"></div>
+      </section>
+    </div>
+
+    <section class="tarjeta" style="--i:3">
+      <header>
+        <h2>Vencimientos próximos</h2>
+        <a class="accion btn chico" href="vencimientos.html">Ver todos</a>
+      </header>
+      <div id="vencimientos"></div>
+    </section>
+
+    <section class="tarjeta" style="--i:4">
+      <header>
+        <h2>Oportunidades abiertas</h2>
+        <a class="accion btn chico" href="oportunidades.html">Ver todas</a>
+      </header>
+      <div id="oportunidades"></div>
+    </section>
+
+    <section class="tarjeta" style="--i:5">
+      <header>
+        <h2>Cobertura de seguimiento del equipo</h2>
+      </header>
+      <div class="cuerpo" id="anillo"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/constantes.js"></script>
+  <script src="../assets/js/supabase.js"></script>
+  <script src="../assets/js/ui.js"></script>
+  <script src="../assets/js/graficos.js"></script>
+  <script src="../assets/js/render.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+  (async function () {
+    const usuario = await App.iniciar({ rol: 'director', activo: 'dashboard' });
+    if (!usuario) return;
+
+    UI.pinta('#vencimientos', UI.esqueleto(4));
+    UI.pinta('#oportunidades', UI.esqueleto(3));
+
+    try {
+      const [resumen, polizas, oportus] = await Promise.all([
+        API.resumenEquipo(),
+        API.polizas({}),
+        API.oportunidades({ estatus: 'nueva' }),
+      ]);
+
+      const vivas = polizas.filter((p) => ['activa', 'por_vencer'].includes(p.estatus));
+      const prima = resumen.reduce((s, r) => s + Number(r.prima_bajo_gestion || 0), 0);
+      const totalPolizas = resumen.reduce((s, r) => s + Number(r.polizas_vigentes || 0), 0);
+      const vencs = vivas.filter((p) => p.dias_para_vencer <= 90 && p.dias_para_vencer >= 0)
+        .sort((a, b) => a.dias_para_vencer - b.dias_para_vencer);
+      const v30 = vencs.filter((p) => p.dias_para_vencer <= 30).length;
+      const enRiesgo = oportus
+        .filter((o) => o.tipo === 'riesgo_no_renovacion')
+        .reduce((s, o) => s + Number(o.valor_estimado || 0), 0);
+
+      /* ---- Hero: la prima bajo gestión es la cifra que define al equipo ---- */
+      UI.pinta('#hero', `
+        <div class="hero">
+          <div class="saludo">Prima bajo gestión del equipo</div>
+          <div class="cifra" data-contador="${Math.round(prima)}" data-prefijo="$">$0</div>
+          <div class="detalle">
+            ${totalPolizas} pólizas vigentes repartidas entre ${resumen.length} agentes.
+            ${enRiesgo ? `Hay <b>${UI.mxn(enRiesgo)}</b> en riesgo por falta de seguimiento.` : 'Sin prima en riesgo por falta de seguimiento.'}
+          </div>
+          <div class="acciones">
+            <a class="btn chico claro" href="vencimientos.html">Vencimientos</a>
+            <a class="btn chico" href="cartera.html">Cartera completa</a>
+          </div>
+        </div>`);
+
+      /* ---- Métricas ---- */
+      UI.pinta('#metricas', [
+        UI.metrica('Pólizas vigentes', totalPolizas, `${resumen.length} agentes`, 'acento', 0),
+        UI.metrica('Vencen en 30 días', v30, `${vencs.length} en 90 días`, v30 ? 'riesgo' : '', 1),
+        UI.metrica('Prima en riesgo', UI.mxnCorto(enRiesgo), 'sin contacto reciente', enRiesgo ? 'alerta' : '', 2),
+        UI.metrica('Oportunidades', oportus.length, 'sin atender', oportus.length ? 'alerta' : '', 3),
+      ].join(''));
+
+      /* ---- Ranking de agentes por prima ---- */
+      UI.pinta('#ranking', Graficos.barras(
+        resumen.map((r) => ({ etiqueta: r.agente_nombre, valor: Number(r.prima_bajo_gestion || 0) })),
+        { formato: UI.mxnCorto }));
+
+      /* ---- Dona por ramo ---- */
+      const porRamo = {};
+      vivas.forEach((p) => { porRamo[p.ramo] = (porRamo[p.ramo] || 0) + Number(p.prima_anual || 0); });
+      UI.pinta('#dona', Graficos.dona(
+        Object.entries(porRamo)
+          .sort((a, b) => b[1] - a[1])
+          .map(([r, v]) => ({ etiqueta: UI.ramo(r).label, valor: v, color: UI.ramo(r).color })),
+        { formato: UI.mxnCorto }));
+
+      /* ---- Listas: solo lo más urgente, el detalle vive en su pantalla ---- */
+      UI.pinta('#vencimientos', Render.lista(
+        vencs.slice(0, 6),
+        (p) => Render.poliza(p, { mostrarAgente: true }),
+        'Nada por vencer en los próximos 90 días.'));
+
+      UI.pinta('#oportunidades', Render.lista(
+        oportus.slice(0, 6),
+        (o) => Render.oportunidad(o, { mostrarAgente: true }),
+        'Sin oportunidades nuevas.'));
+
+      /* ---- Cobertura de seguimiento del equipo ---- */
+      const clientes = new Set(vivas.map((p) => p.cliente_id));
+      const conContacto = new Set(vivas
+        .filter((p) => p.ultimo_contacto && (Date.now() - new Date(p.ultimo_contacto)) < 60 * 86400000)
+        .map((p) => p.cliente_id));
+      const pct = clientes.size ? (conContacto.size / clientes.size) * 100 : 0;
+
+      UI.pinta('#anillo', Graficos.anillo(pct, {
+        etiqueta: 'de la cartera con contacto',
+        pie: `en los últimos 60 días (${conContacto.size} de ${clientes.size} clientes)`,
+      }));
+
+      Graficos.activar(document);
+    } catch (e) {
+      UI.error('#aviso', e);
+      UI.pinta('#vencimientos', UI.vacio('No se pudo cargar.'));
+      UI.pinta('#oportunidades', UI.vacio('No se pudo cargar.'));
+    }
+  })();
+  </script>
+</body>
+</html>

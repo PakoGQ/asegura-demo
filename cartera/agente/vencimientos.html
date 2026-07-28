@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mis vencimientos</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/componentes.css">
+</head>
+<body>
+  <main class="contenedor">
+    <h1>Vencimientos</h1>
+    <p class="silencio">Lo que cae primero, primero. Toca WhatsApp para contactar sin salir del sistema.</p>
+    <div id="aviso" class="oculto"></div>
+
+    <div class="filtros">
+      <select id="f-dias">
+        <option value="30">Próximos 30 días</option>
+        <option value="60" selected>Próximos 60 días</option>
+        <option value="90">Próximos 90 días</option>
+      </select>
+    </div>
+
+    <div id="metricas" class="metricas"></div>
+
+    <section class="tarjeta">
+      <header><h2>Por renovar</h2><span class="accion silencio" id="conteo"></span></header>
+      <div id="lista"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/constantes.js"></script>
+  <script src="../assets/js/supabase.js"></script>
+  <script src="../assets/js/ui.js"></script>
+  <script src="../assets/js/render.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+  (async function () {
+    const usuario = await App.iniciar({ rol: 'agente', activo: 'vencimientos' });
+    if (!usuario) return;
+
+    /* Acciones de campo: contactar y registrar el contacto en dos taps. */
+    function acciones(p) {
+      const wa = UI.linkWhatsApp(
+        p.cliente_telefono,
+        `Hola ${p.cliente_nombre}, te escribo por la renovación de tu póliza de ` +
+        `${UI.ramo(p.ramo).label} que vence el ${UI.fecha(p.fecha_vencimiento)}.`
+      );
+      return `
+        <div class="acciones" style="margin-top:.5rem">
+          ${wa ? `<a class="btn chico primario" href="${UI.esc(wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+          <a class="btn chico" href="actividad.html?cliente=${encodeURIComponent(p.cliente_id)}&poliza=${encodeURIComponent(p.id)}&tipo=renovacion">Registrar contacto</a>
+        </div>`;
+    }
+
+    const fila = (p) => Render.poliza(p, { acciones });
+
+    async function cargar() {
+      UI.pinta('#lista', UI.cargando());
+      try {
+        const dias = Number(UI.$('#f-dias').value);
+        const filas = await API.vencimientos({ dias });
+
+        const prima = filas.reduce((s, p) => s + Number(p.prima_anual || 0), 0);
+        const com   = filas.reduce((s, p) => s + Number(p.comision_estimada || 0), 0);
+        const frias = filas.filter((p) => !p.ultimo_contacto ||
+          (Date.now() - new Date(p.ultimo_contacto)) > 60 * 86400000).length;
+
+        UI.pinta('#metricas', [
+          UI.metrica('Por renovar', filas.length, `en ${dias} días`),
+          UI.metrica('Prima', UI.mxnCorto(prima), 'anualizada'),
+          UI.metrica('Comisión est.', UI.mxnCorto(com)),
+          UI.metrica('Sin contacto', frias, 'más de 60 días', frias ? 'riesgo' : ''),
+        ].join(''));
+
+        UI.$('#conteo').textContent = `${filas.length} póliza${filas.length === 1 ? '' : 's'}`;
+        UI.pinta('#lista', Render.lista(filas, fila, 'Nada por renovar en esa ventana. Buen momento para prospectar.'));
+      } catch (e) {
+        UI.error('#aviso', e);
+        UI.pinta('#lista', UI.vacio('No se pudo cargar.'));
+      }
+    }
+
+    UI.$('#f-dias').addEventListener('change', cargar);
+    await cargar();
+  })();
+  </script>
+</body>
+</html>

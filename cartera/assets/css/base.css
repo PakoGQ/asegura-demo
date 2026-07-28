@@ -1,0 +1,129 @@
+/* ==========================================================================
+   base.css — Variables, reset y tipografía. Mobile-first.
+
+   [GNP] TODA la identidad visual vive en el bloque de marca de aquí abajo.
+   Al replicar para otro director/aseguradora se cambian esas líneas y nada
+   más: el resto del sistema consume tokens, nunca hex sueltos.
+   ========================================================================== */
+
+:root {
+  /* ---- Marca [GNP] ------------------------------------------------------
+     Construida alrededor del naranja institucional. Si el Director comparte
+     el manual de marca oficial, estos son los cinco valores a sustituir. */
+  --gnp-naranja:        #ee7203;
+  --gnp-naranja-vivo:   #ff8c1a;
+  --gnp-naranja-hondo:  #c25a02;
+  --gnp-tinta:          #10243a;   /* azul casi negro, para superficies fuertes */
+  --gnp-tinta-suave:    #1c3a5c;
+
+  /* Alias semánticos: el resto del CSS usa estos, no los de arriba */
+  --acento:        var(--gnp-naranja);
+  --acento-vivo:   var(--gnp-naranja-vivo);
+  --acento-oscuro: var(--gnp-naranja-hondo);
+  --acento-suave:  #fff2e5;
+  --acento-tenue:  #fff8f1;
+  --degradado-marca: linear-gradient(135deg, var(--gnp-naranja-hondo) 0%, var(--gnp-naranja) 45%, var(--gnp-naranja-vivo) 100%);
+  --degradado-tinta: linear-gradient(150deg, var(--gnp-tinta) 0%, var(--gnp-tinta-suave) 100%);
+
+  /* ---- Neutros ----------------------------------------------------------
+     Con una pizca de azul del tinta de marca: un gris puro se ve accidental. */
+  --fondo:       #f4f6f9;
+  --superficie:  #ffffff;
+  --superficie-2:#fafbfc;
+  --borde:       #e2e7ee;
+  --borde-fuerte:#cfd7e2;
+  --texto:       #101a26;
+  --texto-suave: #64748b;
+
+  /* ---- Semánticos: estado, NO marca ---- */
+  --ok: #0f7a58;          --ok-suave: #e4f5ef;
+  --alerta: #b45309;      --alerta-suave: #fef3e2;
+  --riesgo: #b42318;      --riesgo-suave: #fdeceb;
+  --info: #1558c0;        --info-suave: #e9f0fd;
+
+  /* ---- Colores de ramo (categóricos, para gráficas) ---- */
+  --ramo-auto:           #ee7203;
+  --ramo-vida:           #1f6f8b;
+  --ramo-gastos_medicos: #2e9e7e;
+  --ramo-hogar:          #7c5cbf;
+  --ramo-empresarial:    #10243a;
+  --ramo-educativo:      #d9a520;
+  --ramo-fianzas:        #9c6644;
+
+  /* ---- Forma y profundidad ---- */
+  --radio: 14px;
+  --radio-sm: 9px;
+  --sombra:    0 1px 2px rgba(16, 26, 38, .05), 0 2px 6px -1px rgba(16, 26, 38, .07);
+  --sombra-md: 0 2px 4px rgba(16, 26, 38, .05), 0 12px 24px -8px rgba(16, 26, 38, .16);
+  --sombra-acento: 0 6px 18px -6px rgba(238, 114, 3, .5);
+
+  /* ---- Movimiento ----
+     Una sola curva para todo: da coherencia sin pensarlo cada vez. */
+  --curva: cubic-bezier(.32, .72, 0, 1);
+  --rapido: 140ms;
+  --medio: 260ms;
+  --lento: 520ms;
+
+  --alto-nav: 62px;
+  --ancho-max: 1120px;
+}
+
+/* Quien pidió menos movimiento, recibe menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+body { padding-bottom: calc(var(--alto-nav) + env(safe-area-inset-bottom, 0px)); }
+
+h1, h2, h3 { margin: 0 0 .5rem; line-height: 1.2; font-weight: 680; letter-spacing: -.01em; }
+h1 { font-size: 1.4rem; text-wrap: balance; }
+h2 { font-size: 1.08rem; }
+h3 { font-size: .95rem; }
+
+p { margin: 0 0 .75rem; }
+a { color: var(--acento-oscuro); }
+
+.contenedor {
+  max-width: var(--ancho-max);
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.silencio { color: var(--texto-suave); font-size: .85rem; }
+.centrado { text-align: center; }
+.derecha { text-align: right; }
+.oculto { display: none !important; }
+
+/* Números: tabulares para que las columnas de dinero alineen */
+.num { font-variant-numeric: tabular-nums; }
+
+/* Foco visible y con la forma del elemento, no un rectángulo genérico */
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (min-width: 780px) {
+  body { padding-bottom: 0; }
+  h1 { font-size: 1.7rem; }
+  .contenedor { padding: 1.5rem; }
+}

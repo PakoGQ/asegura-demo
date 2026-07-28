@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mi cartera</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/componentes.css">
+</head>
+<body>
+  <main class="contenedor">
+    <h1>Mi cartera</h1>
+    <div id="aviso" class="oculto"></div>
+
+    <div id="metricas" class="metricas"></div>
+
+    <div class="filtros">
+      <select id="f-ramo"></select>
+      <select id="f-estatus"></select>
+      <select id="f-dias">
+        <option value="">Todas</option>
+        <option value="30">Vencen en 30 días</option>
+        <option value="60">Vencen en 60 días</option>
+        <option value="90">Vencen en 90 días</option>
+      </select>
+    </div>
+
+    <section class="tarjeta">
+      <header>
+        <h2>Pólizas</h2>
+        <button class="accion btn chico primario" id="btn-nueva" type="button">+ Póliza</button>
+      </header>
+      <div id="lista"></div>
+    </section>
+
+    <section class="tarjeta oculto" id="form-caja">
+      <header><h2>Nueva póliza</h2></header>
+      <div class="cuerpo">
+        <form id="form-poliza">
+          <div class="campo">
+            <label for="cliente">Cliente</label>
+            <select id="cliente" required></select>
+          </div>
+          <div class="campos-2">
+            <div class="campo">
+              <label for="ramo">Ramo</label>
+              <select id="ramo" required></select>
+            </div>
+            <div class="campo">
+              <label for="numero">Número de póliza</label>
+              <input id="numero" required>
+            </div>
+          </div>
+          <div class="campos-2">
+            <div class="campo">
+              <label for="prima">Prima anual (MXN)</label>
+              <input id="prima" type="number" min="0" step="0.01" required>
+            </div>
+            <div class="campo">
+              <label for="comision">Comisión (%)</label>
+              <input id="comision" type="number" min="0" max="100" step="0.1">
+            </div>
+          </div>
+          <div class="campos-2">
+            <div class="campo">
+              <label for="inicio">Inicio de vigencia</label>
+              <input id="inicio" type="date" required>
+            </div>
+            <div class="campo">
+              <label for="vencimiento">Vencimiento</label>
+              <input id="vencimiento" type="date" required>
+            </div>
+          </div>
+          <div class="campo">
+            <label for="forma">Forma de pago</label>
+            <select id="forma"></select>
+          </div>
+          <div class="acciones">
+            <button class="btn primario" type="submit" id="btn-guardar">Guardar</button>
+            <button class="btn" type="button" id="btn-cancelar">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/constantes.js"></script>
+  <script src="../assets/js/supabase.js"></script>
+  <script src="../assets/js/ui.js"></script>
+  <script src="../assets/js/render.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+  (async function () {
+    const usuario = await App.iniciar({ rol: 'agente', activo: 'cartera' });
+    if (!usuario) return;
+
+    UI.$('#f-ramo').innerHTML    = UI.opciones(CAT.RAMOS, true, 'Todos los ramos');
+    UI.$('#f-estatus').innerHTML = UI.opciones(CAT.ESTATUS_POLIZA, true, 'Todos los estatus');
+    UI.$('#ramo').innerHTML      = UI.opciones(CAT.RAMOS, false);
+    UI.$('#forma').innerHTML     = UI.opciones(CAT.FORMAS_PAGO, true, 'Sin especificar');
+
+    const cajaForm = UI.$('#form-caja');
+
+    async function cargarClientes() {
+      const cs = await API.clientes();
+      UI.$('#cliente').innerHTML = cs.length
+        ? cs.map((c) => `<option value="${UI.esc(c.id)}">${UI.esc(c.nombre)}</option>`).join('')
+        : '<option value="">Primero da de alta un cliente</option>';
+    }
+
+    async function cargar() {
+      UI.pinta('#lista', UI.cargando());
+      try {
+        const filas = await API.polizas({
+          ramo:    UI.$('#f-ramo').value || undefined,
+          estatus: UI.$('#f-estatus').value || undefined,
+          diasMax: UI.$('#f-dias').value || undefined,
+        });
+        UI.pinta('#metricas', Render.totalesCartera(filas));
+        UI.pinta('#lista', Render.lista(filas, (p) => Render.poliza(p),
+          'Todavía no tienes pólizas capturadas.'));
+      } catch (e) {
+        UI.error('#aviso', e);
+        UI.pinta('#lista', UI.vacio('No se pudo cargar.'));
+      }
+    }
+
+    UI.$('#btn-nueva').addEventListener('click', async () => {
+      cajaForm.classList.remove('oculto');
+      await cargarClientes();
+      cajaForm.scrollIntoView({ behavior: 'smooth' });
+    });
+    UI.$('#btn-cancelar').addEventListener('click', () => cajaForm.classList.add('oculto'));
+
+    UI.$('#form-poliza').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const btn = UI.$('#btn-guardar');
+      btn.disabled = true;
+      UI.aviso('#aviso', '');
+      try {
+        await API.guardarPoliza({
+          cliente_id: UI.$('#cliente').value,
+          agente_id: usuario.id,
+          aseguradora: CONFIG.ASEGURADORA_DEFAULT,
+          ramo: UI.$('#ramo').value,
+          numero_poliza: UI.$('#numero').value.trim(),
+          prima_anual: Number(UI.$('#prima').value),
+          comision_pct: UI.$('#comision').value ? Number(UI.$('#comision').value) : null,
+          fecha_inicio: UI.$('#inicio').value,
+          fecha_vencimiento: UI.$('#vencimiento').value,
+          forma_pago: UI.$('#forma').value || null,
+          estatus: 'activa',
+        });
+        UI.$('#form-poliza').reset();
+        cajaForm.classList.add('oculto');
+        UI.aviso('#aviso', 'Póliza guardada.', 'exito');
+        await cargar();
+      } catch (e) {
+        UI.error('#aviso', e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    UI.$$('.filtros select').forEach((s) => s.addEventListener('change', cargar));
+    await cargar();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Panel del Director — Asegura</title>
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+</head>
+<body class="panel-page panel-admin">
+
+<div class="panel-topbar">
+  <div class="panel-marca">
+    <span class="logo-marca"><i class="fas fa-shield-heart"></i></span>
+    <span data-marca>Asegura</span>
+    <span class="panel-rol">Dirección</span>
+  </div>
+  <div class="panel-topbar-der">
+    <span class="panel-quien" id="pdQuien"></span>
+    <button class="btn btn-ghost btn-sm" onclick="salirPanel()">
+      <i class="fas fa-right-from-bracket"></i> Salir
+    </button>
+  </div>
+</div>
+
+<div class="admin-layout">
+  <aside class="admin-sidebar" id="pdSidebar">
+    <p class="admin-nav-section">Equipo</p>
+    <button class="admin-nav-item activo" data-sec="dashboard"><i class="fas fa-chart-line"></i> Panel</button>
+    <button class="admin-nav-item" data-sec="agentes"><i class="fas fa-users"></i> Agentes</button>
+    <button class="admin-nav-item" data-sec="citas"><i class="fas fa-calendar-days"></i> Citas</button>
+    <button class="admin-nav-item" data-sec="resenas"><i class="fas fa-star"></i> Reseñas
+      <span class="nav-badge" id="pdBadgeResenas"></span></button>
+    <button class="admin-nav-item" data-sec="postulaciones"><i class="fas fa-id-badge"></i> Postulaciones
+      <span class="nav-badge" id="pdBadgePost"></span></button>
+
+    <p class="admin-nav-section">Negocio</p>
+    <button class="admin-nav-item" data-sec="ingresos"><i class="fas fa-coins"></i> Ingresos</button>
+    <button class="admin-nav-item" data-sec="afiliacion"><i class="fas fa-file-invoice"></i> Afiliación</button>
+    <a class="admin-nav-item" href="cartera/director/dashboard.html"><i class="fas fa-folder-open"></i> Cartera</a>
+
+    <p class="admin-nav-section">Sistema</p>
+    <button class="admin-nav-item" data-sec="config"><i class="fas fa-gear"></i> Configuración</button>
+  </aside>
+
+  <main class="admin-main" id="pdMain">
+    <div class="perfil-cargando"><i class="fas fa-spinner fa-spin"></i> Cargando…</div>
+  </main>
+</div>
+
+<nav class="panel-bottom-nav">
+  <button class="panel-bottom-nav-item activo" data-sec="dashboard"><i class="fas fa-chart-line"></i><span>Panel</span></button>
+  <button class="panel-bottom-nav-item" data-sec="agentes"><i class="fas fa-users"></i><span>Agentes</span></button>
+  <button class="panel-bottom-nav-item" data-sec="citas"><i class="fas fa-calendar-days"></i><span>Citas</span></button>
+  <button class="panel-bottom-nav-item" data-sec="resenas"><i class="fas fa-star"></i><span>Reseñas</span></button>
+</nav>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

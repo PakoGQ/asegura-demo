@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mi día</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/componentes.css">
+</head>
+<body>
+  <main class="contenedor">
+    <div id="aviso" class="oculto"></div>
+    <div id="hero"></div>
+    <div id="metricas" class="metricas"></div>
+
+    <section class="tarjeta" style="--i:1">
+      <header><h2>Prioridades de hoy</h2><span class="accion silencio" id="conteo-prio"></span></header>
+      <div id="prioridades"></div>
+    </section>
+
+    <div class="graficas dos">
+      <section class="tarjeta" style="--i:2">
+        <header><h2>Mi cartera por ramo</h2></header>
+        <div class="cuerpo" id="dona"></div>
+      </section>
+      <section class="tarjeta" style="--i:3">
+        <header><h2>Qué vence y cuándo</h2></header>
+        <div class="cuerpo" id="barras"></div>
+      </section>
+    </div>
+
+    <section class="tarjeta" style="--i:4">
+      <header><h2>Cobertura de seguimiento</h2></header>
+      <div class="cuerpo" id="anillo"></div>
+    </section>
+
+    <section class="tarjeta" style="--i:5">
+      <header>
+        <h2>Últimos contactos</h2>
+        <a class="accion btn chico" href="actividad.html">Registrar</a>
+      </header>
+      <div id="actividad"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/constantes.js"></script>
+  <script src="../assets/js/supabase.js"></script>
+  <script src="../assets/js/ui.js"></script>
+  <script src="../assets/js/graficos.js"></script>
+  <script src="../assets/js/render.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+  (async function () {
+    const usuario = await App.iniciar({ rol: 'agente', activo: 'dashboard' });
+    if (!usuario) return;
+
+    UI.pinta('#prioridades', UI.esqueleto(4));
+    UI.pinta('#actividad', UI.esqueleto(3));
+
+    try {
+      const [polizas, oportus, acts] = await Promise.all([
+        API.polizas({}),
+        API.oportunidades({}),
+        API.actividad({ limite: 6 }),
+      ]);
+
+      const vivas = polizas.filter((p) => ['activa', 'por_vencer'].includes(p.estatus));
+      const prima = vivas.reduce((s, p) => s + Number(p.prima_anual || 0), 0);
+      const comision = vivas.reduce((s, p) => s + Number(p.comision_estimada || 0), 0);
+      const venc30 = vivas.filter((p) => p.dias_para_vencer <= 30 && p.dias_para_vencer >= 0);
+      const nuevas = oportus.filter((o) => o.estatus === 'nueva');
+
+      /* ---- Hero: una sola frase con lo que define el día ---- */
+      const hora = new Date().getHours();
+      const saludo = hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches';
+      const nombreCorto = usuario.nombre.split(' ')[0];
+
+      UI.pinta('#hero', `
+        <div class="hero">
+          <div class="saludo">${saludo}, ${UI.esc(nombreCorto)}</div>
+          <div class="cifra" data-contador="${venc30.length}">0</div>
+          <div class="detalle">
+            ${venc30.length === 1 ? 'póliza vence' : 'pólizas vencen'} en los próximos 30 días
+            ${nuevas.length ? ` · ${nuevas.length} oportunidad${nuevas.length === 1 ? '' : 'es'} sin atender` : ''}
+          </div>
+          <div class="acciones">
+            <a class="btn chico claro" href="vencimientos.html">Ver vencimientos</a>
+            <a class="btn chico" href="oportunidades.html">Oportunidades</a>
+          </div>
+        </div>`);
+
+      /* ---- Métricas ---- */
+      UI.pinta('#metricas', [
+        UI.metrica('Prima bajo gestión', UI.mxnCorto(prima), 'anualizada', 'acento', 0),
+        UI.metrica('Pólizas vigentes', vivas.length, `${polizas.length} en total`, '', 1),
+        UI.metrica('Comisión estimada', UI.mxnCorto(comision), 'sobre vigentes', '', 2),
+        UI.metrica('Sin atender', nuevas.length, 'oportunidades', nuevas.length ? 'alerta' : '', 3),
+      ].join(''));
+
+      /* ---- Prioridades: riesgo de caída primero, luego lo que vence ---- */
+      const prioridades = []
+        .concat(nuevas
+          .filter((o) => o.tipo === 'riesgo_no_renovacion')
+          .map((o) => ({
+            critica: true,
+            titulo: o.cliente_nombre,
+            sub: o.motivo,
+            badge: UI.badge('Riesgo de caída', 'riesgo'),
+            monto: o.valor_estimado,
+            href: 'oportunidades.html',
+          })))
+        .concat(venc30.map((p) => ({
+          critica: p.dias_para_vencer <= 10,
+          titulo: p.cliente_nombre,
+          sub: `${UI.ramo(p.ramo).icono} ${UI.ramo(p.ramo).label} · ${p.numero_poliza}`,
+          badge: UI.badgeVencimiento(p.fecha_vencimiento),
+          monto: p.prima_anual,
+          href: 'vencimientos.html',
+        })))
+        .slice(0, 6);
+
+      UI.$('#conteo-prio').textContent = prioridades.length
+        ? `${prioridades.length} pendiente${prioridades.length === 1 ? '' : 's'}` : '';
+
+      UI.pinta('#prioridades', prioridades.length ? `<ul class="lista">${
+        prioridades.map((x, i) => `
+          <li class="${x.critica ? 'critica' : ''}" style="--i:${i}">
+            <div class="principal">
+              <div class="titulo">${x.critica ? '<span class="pulso"></span>' : ''}${UI.esc(x.titulo)}</div>
+              <div class="sub">${UI.esc(x.sub)}</div>
+              <div style="margin-top:.3rem">${x.badge}</div>
+            </div>
+            <div class="lateral">
+              <div class="monto num">${UI.mxn(x.monto)}</div>
+              <a class="btn chico" href="${x.href}">Atender</a>
+            </div>
+          </li>`).join('')
+      }</ul>` : UI.vacio('Nada urgente hoy. Buen momento para prospectar.'));
+
+      /* ---- Dona por ramo ---- */
+      const porRamo = {};
+      vivas.forEach((p) => { porRamo[p.ramo] = (porRamo[p.ramo] || 0) + Number(p.prima_anual || 0); });
+      UI.pinta('#dona', Graficos.dona(
+        Object.entries(porRamo)
+          .sort((a, b) => b[1] - a[1])
+          .map(([r, v]) => ({ etiqueta: UI.ramo(r).label, valor: v, color: UI.ramo(r).color })),
+        { formato: UI.mxnCorto }));
+
+      /* ---- Vencimientos por ventana ---- */
+      UI.pinta('#barras', Graficos.barras([
+        { etiqueta: 'Próximos 30 días', valor: venc30.length, color: 'var(--riesgo)' },
+        { etiqueta: '31 a 60 días', valor: vivas.filter((p) => p.dias_para_vencer > 30 && p.dias_para_vencer <= 60).length, color: 'var(--alerta)' },
+        { etiqueta: '61 a 90 días', valor: vivas.filter((p) => p.dias_para_vencer > 60 && p.dias_para_vencer <= 90).length, color: 'var(--info)' },
+        { etiqueta: 'Más de 90 días', valor: vivas.filter((p) => p.dias_para_vencer > 90).length, color: 'var(--borde-fuerte)' },
+      ], { formato: (v) => `${v} pól.` }));
+
+      /* ---- Anillo: % de clientes con contacto en los últimos 60 días.
+             Es el indicador que predice la caída de cartera. ---- */
+      const clientes = new Set(vivas.map((p) => p.cliente_id));
+      const conContacto = new Set(vivas
+        .filter((p) => p.ultimo_contacto && (Date.now() - new Date(p.ultimo_contacto)) < 60 * 86400000)
+        .map((p) => p.cliente_id));
+      const pct = clientes.size ? (conContacto.size / clientes.size) * 100 : 0;
+
+      UI.pinta('#anillo', Graficos.anillo(pct, {
+        etiqueta: 'de tus clientes con contacto',
+        pie: `en los últimos 60 días (${conContacto.size} de ${clientes.size})`,
+      }));
+
+      UI.pinta('#actividad', Render.lista(acts, Render.actividad, 'Todavía no registras actividad.'));
+
+      Graficos.activar(document);
+    } catch (e) {
+      UI.error('#aviso', e);
+      UI.pinta('#prioridades', UI.vacio('No se pudo cargar.'));
+      UI.pinta('#actividad', UI.vacio('No se pudo cargar.'));
+    }
+  })();
+  </script>
+</body>
+</html>

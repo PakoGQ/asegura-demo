@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mis clientes</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/componentes.css">
+</head>
+<body>
+  <main class="contenedor">
+    <h1>Mis clientes</h1>
+    <div id="aviso" class="oculto"></div>
+
+    <div class="filtros">
+      <input type="search" id="f-busqueda" placeholder="Buscar por nombre…">
+      <button class="btn chico primario" id="btn-nuevo" type="button">+ Cliente</button>
+    </div>
+
+    <section class="tarjeta oculto" id="form-caja">
+      <header><h2>Nuevo cliente</h2></header>
+      <div class="cuerpo">
+        <form id="form-cliente">
+          <div class="campo">
+            <label for="nombre">Nombre completo</label>
+            <input id="nombre" required>
+          </div>
+          <div class="campos-2">
+            <div class="campo">
+              <label for="telefono">Teléfono (WhatsApp)</label>
+              <input id="telefono" type="tel" placeholder="+52...">
+            </div>
+            <div class="campo">
+              <label for="nacimiento">Fecha de nacimiento</label>
+              <input id="nacimiento" type="date">
+            </div>
+          </div>
+          <div class="campos-2">
+            <div class="campo">
+              <label for="email">Correo</label>
+              <input id="email" type="email">
+            </div>
+            <div class="campo">
+              <label for="rfc">RFC</label>
+              <input id="rfc" maxlength="13">
+            </div>
+          </div>
+          <div class="campo">
+            <label for="notas">Notas</label>
+            <textarea id="notas"></textarea>
+          </div>
+          <div class="acciones">
+            <button class="btn primario" type="submit" id="btn-guardar">Guardar</button>
+            <button class="btn" type="button" id="btn-cancelar">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Clientes</h2><span class="accion silencio" id="conteo"></span></header>
+      <div id="lista"></div>
+    </section>
+
+    <!-- Detalle: pólizas + historial de contacto del cliente seleccionado -->
+    <section class="tarjeta oculto" id="detalle">
+      <header><h2 id="detalle-nombre"></h2>
+        <button class="accion btn chico" id="btn-cerrar-detalle" type="button">Cerrar</button>
+      </header>
+      <div class="cuerpo">
+        <h3>Pólizas</h3>
+        <div id="detalle-polizas"></div>
+        <h3 style="margin-top:1rem">Historial de contacto</h3>
+        <div id="detalle-actividad"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/constantes.js"></script>
+  <script src="../assets/js/supabase.js"></script>
+  <script src="../assets/js/ui.js"></script>
+  <script src="../assets/js/render.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+  (async function () {
+    const usuario = await App.iniciar({ rol: 'agente', activo: 'clientes' });
+    if (!usuario) return;
+
+    const cajaForm = UI.$('#form-caja');
+    const detalle  = UI.$('#detalle');
+
+    async function cargar() {
+      UI.pinta('#lista', UI.cargando());
+      try {
+        const cs = await API.clientes({ busqueda: UI.$('#f-busqueda').value.trim() || undefined });
+        UI.$('#conteo').textContent = `${cs.length} cliente${cs.length === 1 ? '' : 's'}`;
+        UI.pinta('#lista', Render.lista(cs, (c) => `
+          <li data-cliente="${UI.esc(c.id)}" data-nombre="${UI.esc(c.nombre)}" style="cursor:pointer">
+            <div class="principal">
+              <div class="titulo">${UI.esc(c.nombre)}</div>
+              <div class="sub">${UI.esc(c.telefono || 'Sin teléfono')}${c.email ? ' · ' + UI.esc(c.email) : ''}</div>
+            </div>
+            <div class="lateral"><span class="silencio">ver ›</span></div>
+          </li>`, 'Sin clientes todavía. Empieza dando de alta uno.'));
+      } catch (e) {
+        UI.error('#aviso', e);
+        UI.pinta('#lista', UI.vacio('No se pudo cargar.'));
+      }
+    }
+
+    async function abrirDetalle(clienteId, nombre) {
+      UI.$('#detalle-nombre').textContent = nombre;
+      detalle.classList.remove('oculto');
+      UI.pinta('#detalle-polizas', UI.cargando());
+      UI.pinta('#detalle-actividad', UI.cargando());
+      detalle.scrollIntoView({ behavior: 'smooth' });
+
+      try {
+        const [polizas, acts] = await Promise.all([
+          API.polizas({ clienteId }),
+          API.actividad({ clienteId, limite: 20 }),
+        ]);
+        UI.pinta('#detalle-polizas', Render.lista(polizas, (p) => Render.poliza(p),
+          'Este cliente no tiene pólizas capturadas.'));
+        UI.pinta('#detalle-actividad', Render.lista(acts, Render.actividad,
+          'Sin contactos registrados.'));
+      } catch (e) {
+        UI.error('#aviso', e);
+      }
+    }
+
+    UI.$('#lista').addEventListener('click', (ev) => {
+      const li = ev.target.closest('li[data-cliente]');
+      if (li) abrirDetalle(li.dataset.cliente, li.dataset.nombre);
+    });
+
+    UI.$('#btn-cerrar-detalle').addEventListener('click', () => detalle.classList.add('oculto'));
+    UI.$('#btn-nuevo').addEventListener('click', () => cajaForm.classList.remove('oculto'));
+    UI.$('#btn-cancelar').addEventListener('click', () => cajaForm.classList.add('oculto'));
+
+    UI.$('#form-cliente').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const btn = UI.$('#btn-guardar');
+      btn.disabled = true;
+      UI.aviso('#aviso', '');
+      try {
+        await API.guardarCliente({
+          agente_id: usuario.id,
+          nombre: UI.$('#nombre').value.trim(),
+          telefono: UI.$('#telefono').value.trim() || null,
+          email: UI.$('#email').value.trim() || null,
+          fecha_nacimiento: UI.$('#nacimiento').value || null,
+          rfc: UI.$('#rfc').value.trim().toUpperCase() || null,
+          notas: UI.$('#notas').value.trim() || null,
+        });
+        UI.$('#form-cliente').reset();
+        cajaForm.classList.add('oculto');
+        UI.aviso('#aviso', 'Cliente guardado.', 'exito');
+        await cargar();
+      } catch (e) {
+        UI.error('#aviso', e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Búsqueda con retardo: evita una consulta por cada tecla.
+    let t;
+    UI.$('#f-busqueda').addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(cargar, 300);
+    });
+
+    await cargar();
+  })();
+  </script>
+</body>
+</html>

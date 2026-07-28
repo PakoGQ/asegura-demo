@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Vencimientos del equipo</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/componentes.css">
+</head>
+<body>
+  <main class="contenedor">
+    <h1>Vencimientos</h1>
+    <p class="silencio">Ordenado por lo que cae primero. Lo vencido va hasta arriba.</p>
+    <div id="aviso" class="oculto"></div>
+
+    <div class="filtros">
+      <select id="f-agente"><option value="">Todos los agentes</option></select>
+      <select id="f-dias">
+        <option value="30">Próximos 30 días</option>
+        <option value="60" selected>Próximos 60 días</option>
+        <option value="90">Próximos 90 días</option>
+      </select>
+    </div>
+
+    <div id="metricas" class="metricas"></div>
+
+    <section class="tarjeta">
+      <header><h2>Pólizas por vencer</h2><span class="accion silencio" id="conteo"></span></header>
+      <div id="lista"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/constantes.js"></script>
+  <script src="../assets/js/supabase.js"></script>
+  <script src="../assets/js/ui.js"></script>
+  <script src="../assets/js/render.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+  (async function () {
+    const usuario = await App.iniciar({ rol: 'director', activo: 'vencimientos' });
+    if (!usuario) return;
+
+    try {
+      const equipo = await API.miEquipo();
+      UI.$('#f-agente').innerHTML = '<option value="">Todos los agentes</option>' +
+        equipo.map((a) => `<option value="${UI.esc(a.id)}">${UI.esc(a.nombre)}</option>`).join('');
+    } catch (e) {
+      UI.error('#aviso', e);
+    }
+
+    async function cargar() {
+      UI.pinta('#lista', UI.cargando());
+      try {
+        const dias = Number(UI.$('#f-dias').value);
+        const filas = await API.vencimientos({
+          dias,
+          agenteId: UI.$('#f-agente').value || undefined,
+        });
+
+        const prima = filas.reduce((s, p) => s + Number(p.prima_anual || 0), 0);
+        const vencidas = filas.filter((p) => p.dias_para_vencer < 0).length;
+        // Sin contacto en 60 días: es la señal que dispara la Regla 3.
+        const frias = filas.filter((p) => !p.ultimo_contacto ||
+          (Date.now() - new Date(p.ultimo_contacto)) > 60 * 86400000).length;
+
+        UI.pinta('#metricas', [
+          UI.metrica('Pólizas', filas.length, `en ${dias} días`),
+          UI.metrica('Prima en juego', UI.mxnCorto(prima), 'anualizada', 'alerta'),
+          UI.metrica('Ya vencidas', vencidas, '', vencidas ? 'riesgo' : ''),
+          UI.metrica('Sin contacto', frias, 'más de 60 días', frias ? 'riesgo' : ''),
+        ].join(''));
+
+        UI.$('#conteo').textContent = `${filas.length} póliza${filas.length === 1 ? '' : 's'}`;
+        UI.pinta('#lista', Render.lista(
+          filas,
+          (p) => Render.poliza(p, { mostrarAgente: true }),
+          'Nada por vencer en esa ventana.'));
+      } catch (e) {
+        UI.error('#aviso', e);
+        UI.pinta('#lista', UI.vacio('No se pudo cargar.'));
+      }
+    }
+
+    UI.$$('.filtros select').forEach((s) => s.addEventListener('change', cargar));
+    await cargar();
+  })();
+  </script>
+</body>
+</html>

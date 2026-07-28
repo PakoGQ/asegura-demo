@@ -1,0 +1,19 @@
+# ── Fuera del repositorio público ────────────────────────────────────────────
+# Estos archivos se quedan en la máquina. Contienen el modelo de negocio, los
+# precios, quién es el cliente beta y de qué proyecto se portó el código.
+CLAUDE.md
+docs/
+tools/
+
+# Demo viejo del CRM: quedó desfasado tras el cambio de rumbo.
+demo/
+
+# ── Nunca ──
+.DS_Store
+*.log
+.env
+.env.*
+*service_role*
+*.dump
+*.sql.bak
+respaldos/

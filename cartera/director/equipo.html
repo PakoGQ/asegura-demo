@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Equipo</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/componentes.css">
+</head>
+<body>
+  <main class="contenedor">
+    <h1>Equipo</h1>
+    <div id="aviso" class="oculto"></div>
+
+    <section class="tarjeta">
+      <header>
+        <h2>Agentes</h2>
+        <button class="accion btn chico primario" id="btn-nuevo" type="button">+ Agente</button>
+      </header>
+      <div id="lista"></div>
+    </section>
+
+    <!-- Alta de agente. El usuario de Auth lo crea el director aparte, en el
+         panel de Supabase; aquí se registra la ficha del equipo. -->
+    <section class="tarjeta oculto" id="form-caja">
+      <header><h2>Dar de alta un agente</h2></header>
+      <div class="cuerpo">
+        <form id="form-agente">
+          <div class="campo">
+            <label for="nombre">Nombre completo</label>
+            <input id="nombre" required>
+          </div>
+          <div class="campo">
+            <label for="email">Correo (el mismo con el que entrará)</label>
+            <input id="email" type="email" required>
+          </div>
+          <div class="campos-2">
+            <div class="campo">
+              <label for="telefono">Teléfono</label>
+              <input id="telefono" type="tel" placeholder="+52...">
+            </div>
+            <div class="campo">
+              <label for="cedula">Cédula CNSF</label>
+              <input id="cedula" placeholder="A1-000000">
+            </div>
+          </div>
+          <div class="acciones">
+            <button class="btn primario" type="submit" id="btn-guardar">Guardar</button>
+            <button class="btn" type="button" id="btn-cancelar">Cancelar</button>
+          </div>
+          <p class="silencio" style="margin-top:.75rem">
+            Después crea su acceso en Supabase → Authentication → Users con este
+            mismo correo, y pega su UID en el campo <code>auth_user_id</code>.
+          </p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/constantes.js"></script>
+  <script src="../assets/js/supabase.js"></script>
+  <script src="../assets/js/ui.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+  (async function () {
+    const usuario = await App.iniciar({ rol: 'director', activo: 'equipo' });
+    if (!usuario) return;
+
+    const cajaForm = UI.$('#form-caja');
+
+    async function cargar() {
+      UI.pinta('#lista', UI.cargando());
+      try {
+        const [resumen, agentes] = await Promise.all([API.resumenEquipo(), API.miEquipo()]);
+        const porId = Object.fromEntries(agentes.map((a) => [a.id, a]));
+
+        UI.pinta('#lista', resumen.length ? `<ul class="lista">${
+          resumen.map((r) => {
+            const a = porId[r.agente_id] || {};
+            const atendidas = Number(r.oportunidades_en_proceso) + Number(r.oportunidades_ganadas);
+            return `
+            <li>
+              <div class="principal">
+                <div class="titulo">${UI.esc(r.agente_nombre)}
+                  ${r.activo ? '' : UI.badge('Inactivo', 'riesgo')}</div>
+                <div class="sub">${UI.esc(a.email || '')}${a.cedula ? ' · Céd. ' + UI.esc(a.cedula) : ''}</div>
+                <div class="sub" style="margin-top:.25rem">
+                  ${r.polizas_vigentes} pólizas · ${UI.mxn(r.prima_bajo_gestion)} ·
+                  ${r.actividad_30d} contactos (30 d)
+                </div>
+                <div style="margin-top:.3rem">
+                  ${UI.badge(`${r.vencen_30d} vencen en 30 d`, r.vencen_30d ? 'riesgo' : '')}
+                  ${UI.badge(`${atendidas}/${Number(r.oportunidades_nuevas) + atendidas} oportunidades atendidas`,
+                             r.oportunidades_nuevas > 0 ? 'alerta' : 'ok')}
+                </div>
+              </div>
+              <div class="lateral">
+                <a class="btn chico" href="cartera.html?agente=${encodeURIComponent(r.agente_id)}">Cartera</a>
+              </div>
+            </li>`;
+          }).join('')
+        }</ul>` : UI.vacio('Todavía no hay agentes en tu equipo.'));
+      } catch (e) {
+        UI.error('#aviso', e);
+        UI.pinta('#lista', UI.vacio('No se pudo cargar.'));
+      }
+    }
+
+    UI.$('#btn-nuevo').addEventListener('click', () => cajaForm.classList.remove('oculto'));
+    UI.$('#btn-cancelar').addEventListener('click', () => cajaForm.classList.add('oculto'));
+
+    UI.$('#form-agente').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const btn = UI.$('#btn-guardar');
+      btn.disabled = true;
+      UI.aviso('#aviso', '');
+      try {
+        await API.altaAgente({
+          nombre: UI.$('#nombre').value.trim(),
+          email: UI.$('#email').value.trim(),
+          telefono: UI.$('#telefono').value.trim() || null,
+          cedula: UI.$('#cedula').value.trim() || null,
+          rol: 'agente',
+          director_id: usuario.id,
+        });
+        UI.$('#form-agente').reset();
+        cajaForm.classList.add('oculto');
+        UI.aviso('#aviso', 'Agente dado de alta. Falta crearle su acceso en Supabase.', 'exito');
+        await cargar();
+      } catch (e) {
+        UI.error('#aviso', e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    await cargar();
+  })();
+  </script>
+</body>
+</html>

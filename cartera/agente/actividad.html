@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Registrar actividad</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/componentes.css">
+  <style>
+    /* Selector de tipo en chips: un tap, sin abrir un desplegable. */
+    .chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
+    .chips button {
+      padding: .55rem .3rem;
+      border: 1px solid var(--borde);
+      border-radius: var(--radio-sm);
+      background: var(--superficie);
+      font-size: .78rem;
+      font-weight: 600;
+      color: var(--texto);
+      cursor: pointer;
+      min-height: 56px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    }
+    .chips button.activo { border-color: var(--acento); background: var(--acento-suave); color: var(--acento-oscuro); }
+    .chips .icono { font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <main class="contenedor">
+    <h1>Registrar actividad</h1>
+    <div id="aviso" class="oculto"></div>
+
+    <section class="tarjeta">
+      <div class="cuerpo">
+        <form id="form-actividad">
+          <div class="campo">
+            <label>¿Qué hiciste?</label>
+            <div class="chips" id="chips-tipo"></div>
+          </div>
+
+          <div class="campo">
+            <label for="cliente">Cliente</label>
+            <select id="cliente" required></select>
+          </div>
+
+          <div class="campo">
+            <label for="poliza">Póliza (opcional)</label>
+            <select id="poliza"><option value="">Sin póliza específica</option></select>
+          </div>
+
+          <div class="campo">
+            <label for="descripcion">Nota</label>
+            <textarea id="descripcion" placeholder="Qué se habló, qué sigue…" required></textarea>
+          </div>
+
+          <div class="campo">
+            <label for="resultado">Resultado</label>
+            <select id="resultado">
+              <option value="">Sin definir</option>
+            </select>
+          </div>
+
+          <button class="btn primario bloque" type="submit" id="btn-guardar">Guardar actividad</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <header><h2>Últimos registros</h2></header>
+      <div id="historial"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/constantes.js"></script>
+  <script src="../assets/js/supabase.js"></script>
+  <script src="../assets/js/ui.js"></script>
+  <script src="../assets/js/render.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+  (async function () {
+    const usuario = await App.iniciar({ rol: 'agente', activo: 'actividad' });
+    if (!usuario) return;
+
+    // Se puede llegar precargado desde Vencimientos u Oportunidades.
+    const params = new URLSearchParams(location.search);
+    let tipoElegido = params.get('tipo') || 'llamada';
+
+    UI.pinta('#chips-tipo', Object.entries(CAT.TIPOS_ACTIVIDAD).map(([k, v]) => `
+      <button type="button" data-tipo="${k}" class="${k === tipoElegido ? 'activo' : ''}">
+        <span class="icono">${v.icono}</span><span>${v.label}</span>
+      </button>`).join(''));
+
+    UI.$('#resultado').innerHTML = '<option value="">Sin definir</option>' +
+      UI.opciones(CAT.RESULTADOS_ACTIVIDAD, false);
+
+    UI.$('#chips-tipo').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button[data-tipo]');
+      if (!b) return;
+      tipoElegido = b.dataset.tipo;
+      UI.$$('#chips-tipo button').forEach((x) => x.classList.toggle('activo', x === b));
+    });
+
+    async function cargarPolizasDe(clienteId) {
+      const sel = UI.$('#poliza');
+      sel.innerHTML = '<option value="">Sin póliza específica</option>';
+      if (!clienteId) return;
+      try {
+        const ps = await API.polizas({ clienteId });
+        sel.innerHTML += ps.map((p) =>
+          `<option value="${UI.esc(p.id)}">${UI.esc(UI.ramo(p.ramo).label)} · ${UI.esc(p.numero_poliza)}</option>`
+        ).join('');
+        const preseleccion = params.get('poliza');
+        if (preseleccion) sel.value = preseleccion;
+      } catch (e) {
+        UI.error('#aviso', e);
+      }
+    }
+
+    async function cargarHistorial() {
+      UI.pinta('#historial', UI.cargando());
+      try {
+        const acts = await API.actividad({ limite: 15 });
+        UI.pinta('#historial', Render.lista(acts, Render.actividad, 'Todavía no registras actividad.'));
+      } catch (e) {
+        UI.error('#aviso', e);
+        UI.pinta('#historial', UI.vacio('No se pudo cargar.'));
+      }
+    }
+
+    try {
+      const cs = await API.clientes();
+      UI.$('#cliente').innerHTML = cs.length
+        ? cs.map((c) => `<option value="${UI.esc(c.id)}">${UI.esc(c.nombre)}</option>`).join('')
+        : '<option value="">Primero da de alta un cliente</option>';
+      const preseleccion = params.get('cliente');
+      if (preseleccion) UI.$('#cliente').value = preseleccion;
+      await cargarPolizasDe(UI.$('#cliente').value);
+    } catch (e) {
+      UI.error('#aviso', e);
+    }
+
+    UI.$('#cliente').addEventListener('change', (ev) => cargarPolizasDe(ev.target.value));
+
+    UI.$('#form-actividad').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const btn = UI.$('#btn-guardar');
+      btn.disabled = true;
+      UI.aviso('#aviso', '');
+      try {
+        await API.registrarActividad({
+          agente_id: usuario.id,
+          cliente_id: UI.$('#cliente').value,
+          poliza_id: UI.$('#poliza').value || null,
+          tipo: tipoElegido,
+          descripcion: UI.$('#descripcion').value.trim(),
+          resultado: UI.$('#resultado').value || null,
+          fecha: new Date().toISOString(),
+        });
+        UI.$('#descripcion').value = '';
+        UI.$('#resultado').value = '';
+        UI.aviso('#aviso', 'Actividad registrada.', 'exito');
+        await cargarHistorial();
+      } catch (e) {
+        UI.error('#aviso', e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    await cargarHistorial();
+  })();
+  </script>
+</body>
+</html>

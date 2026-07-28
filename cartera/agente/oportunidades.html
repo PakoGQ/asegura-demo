@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mis oportunidades</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/componentes.css">
+</head>
+<body>
+  <main class="contenedor">
+    <h1>Oportunidades</h1>
+    <p class="silencio">Detectadas sobre tu propia cartera. Marca en qué va cada una.</p>
+    <div id="aviso" class="oculto"></div>
+
+    <div class="filtros">
+      <select id="f-tipo"></select>
+      <select id="f-estatus">
+        <option value="">Abiertas y cerradas</option>
+      </select>
+      <button class="btn chico" id="btn-generar" type="button">Buscar nuevas</button>
+    </div>
+
+    <div id="metricas" class="metricas"></div>
+
+    <section class="tarjeta">
+      <header><h2>Detectadas</h2><span class="accion silencio" id="conteo"></span></header>
+      <div id="lista"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/constantes.js"></script>
+  <script src="../assets/js/supabase.js"></script>
+  <script src="../assets/js/ui.js"></script>
+  <script src="../assets/js/render.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+  (async function () {
+    const usuario = await App.iniciar({ rol: 'agente', activo: 'oportunidades' });
+    if (!usuario) return;
+
+    UI.$('#f-tipo').innerHTML = UI.opciones(CAT.TIPOS_OPORTUNIDAD, true, 'Todos los tipos');
+    UI.$('#f-estatus').innerHTML = '<option value="">Todos los estatus</option>' +
+      UI.opciones(CAT.ESTATUS_OPORTUNIDAD, false);
+    UI.$('#f-estatus').value = 'nueva';
+
+    async function cargar() {
+      UI.pinta('#lista', UI.cargando());
+      try {
+        const [filas, todas] = await Promise.all([
+          API.oportunidades({
+            tipo:    UI.$('#f-tipo').value || undefined,
+            estatus: UI.$('#f-estatus').value || undefined,
+          }),
+          API.oportunidades({}),
+        ]);
+
+        const cuenta = (e) => todas.filter((o) => o.estatus === e).length;
+        const enRiesgo = todas
+          .filter((o) => o.tipo === 'riesgo_no_renovacion' && o.estatus === 'nueva')
+          .reduce((s, o) => s + Number(o.valor_estimado || 0), 0);
+
+        UI.pinta('#metricas', [
+          UI.metrica('Nuevas', cuenta('nueva'), '', cuenta('nueva') ? 'alerta' : ''),
+          UI.metrica('En proceso', cuenta('en_proceso')),
+          UI.metrica('Ganadas', cuenta('ganada')),
+          UI.metrica('Prima en riesgo', UI.mxnCorto(enRiesgo), 'sin atender', enRiesgo ? 'riesgo' : ''),
+        ].join(''));
+
+        UI.$('#conteo').textContent = `${filas.length} oportunidad${filas.length === 1 ? '' : 'es'}`;
+        UI.pinta('#lista', Render.lista(
+          filas,
+          (o) => Render.oportunidad(o, { acciones: true }),
+          'Nada pendiente por aquí. Usa "Buscar nuevas" para revisar tu cartera.'));
+      } catch (e) {
+        UI.error('#aviso', e);
+        UI.pinta('#lista', UI.vacio('No se pudo cargar.'));
+      }
+    }
+
+    /* Cambio de estatus: delegado, así sobrevive a cada re-render de la lista. */
+    UI.$('#lista').addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('button[data-op]');
+      if (!btn) return;
+      btn.disabled = true;
+      try {
+        await API.cambiarEstatusOportunidad(btn.dataset.op, btn.dataset.estatus);
+        await cargar();
+      } catch (e) {
+        UI.error('#aviso', e);
+        btn.disabled = false;
+      }
+    });
+
+    UI.$('#btn-generar').addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget;
+      btn.disabled = true;
+      btn.textContent = 'Revisando…';
+      UI.aviso('#aviso', '');
+      try {
+        const nuevas = await API.generarOportunidades();
+        UI.aviso('#aviso', nuevas
+          ? `Se detectaron ${nuevas} oportunidad${nuevas === 1 ? '' : 'es'} nueva${nuevas === 1 ? '' : 's'}.`
+          : 'Sin oportunidades nuevas por ahora.', nuevas ? 'exito' : 'info');
+        await cargar();
+      } catch (e) {
+        UI.error('#aviso', e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Buscar nuevas';
+      }
+    });
+
+    UI.$$('.filtros select').forEach((s) => s.addEventListener('change', cargar));
+    await cargar();
+  })();
+  </script>
+</body>
+</html>
