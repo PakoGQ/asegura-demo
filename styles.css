@@ -84,7 +84,7 @@
     align-items: center;
   }
   .nav .nav-logo img {
-    height: 62px;
+    height: 78px;
     width: auto;
     margin-top: 0;
   }
@@ -256,11 +256,11 @@ p  { line-height: 1.7; color: var(--t2); }
 }
 .nav-logo span { color: var(--acento); }
 .nav-logo img {
-  height: 74px;
+  height: 96px;
   width: auto;
   display: block;
 }
-.footer-brand .nav-logo img { height: 120px; width: auto; }
+.footer-brand .nav-logo img { height: 160px; width: auto; }
 .nav-links {
   display: flex;
   align-items: center;
@@ -3477,7 +3477,7 @@ h4 { font-size: clamp(.95rem, 2.2vw, 1.1rem); }
   .nav { padding: 0 1rem; }
   .nav-logo { font-size: 14px; letter-spacing: .03em; }
   .nav-logo img { height: 108px; }
-  .footer-brand .nav-logo img { height: 96px; }
+  .footer-brand .nav-logo img { height: 124px; }
   .nav-center { display: none; }
   .nav-links { display: none; }
   .nav-cta { gap: .35rem; }
@@ -4417,16 +4417,18 @@ h4 { font-size: clamp(.95rem, 2.2vw, 1.1rem); }
     animation-delay: -2s;
   }
 
-  /* ── Nav links: posición absoluta pegada a la línea dorada ── */
+  /* ── Nav links ──
+     En el proyecto de referencia iban en posición absoluta, centrados abajo
+     de la marca. Aquí la cabecera es de una sola fila: van en el flujo, a la
+     derecha del logo y alineados con él. */
   .nav .nav-center .nav-links {
-    position: absolute;
-    bottom: 8px;
-    left: 50%;
-    transform: translateX(-50%);
+    position: static;
+    transform: none;
     gap: 2.5rem;
     display: flex;
     margin-top: 0;
     white-space: nowrap;
+    align-self: center;
   }
   .nav-links a {
     font-size: .85rem;
@@ -7574,7 +7576,7 @@ details.faq-item[open] .faq-a {
    Se sobrescribe en vez de borrar la original para no romper otras páginas
    mientras avanza el port.
    ────────────────────────────────────────────────────────────────────────── */
-:root { --nav-h: 98px; --topbar-h: 90px; }
+:root { --nav-h: 122px; --topbar-h: 112px; }
 
 .nav {
   height: var(--nav-h);
@@ -7614,7 +7616,7 @@ details.faq-item[open] .faq-a {
 body { padding-top: var(--nav-h); }
 
 @media (max-width: 900px) {
-  :root { --nav-h: 84px; --topbar-h: 78px; }
+  :root { --nav-h: 100px; --topbar-h: 94px; }
   .nav { padding: 0 1rem; }
   .nav-center { display: none; }
   .nav-brand-title { font-size: 1.05rem; }
@@ -8421,9 +8423,9 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
    logo-icono.png solo la V con palomita, cuadrado → PWA y favicon
    ───────────────────────────────────────────────────────────────────────── */
 .nav-logo .logo-img, .panel-marca .logo-img {
-  height: 74px; width: auto; max-width: 190px;
+  height: 96px; width: auto; max-width: 240px;
 }
-.footer-brand .logo-img { height: 120px; max-width: 260px; }
+.footer-brand .logo-img { height: 160px; max-width: 330px; }
 .logo-grande { height: 120px; max-width: 240px; margin: 0 auto; }
 
 /* El logo ya dice "Vaxti": el texto de al lado solo aparece si el archivo
@@ -8434,6 +8436,22 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
 .nav-logo:has(.logo-img.sin-logo) ~ .solo-sin-logo { display: block; }
 
 @media (max-width: 900px) {
-  .nav-logo .logo-img, .panel-marca .logo-img { height: 62px; }
-  .footer-brand .logo-img { height: 96px; }
+  .nav-logo .logo-img, .panel-marca .logo-img { height: 78px; }
+  .footer-brand .logo-img { height: 124px; }
 }
+
+/* El nav del proyecto de referencia apilaba título, lema y enlaces en columna
+   dentro de .nav-center. Con los dos primeros ocultos, los enlaces caían al
+   fondo de esa columna y quedaban desalineados del logo. */
+.nav > *, .nav-center, .nav-links { align-self: center; }
+.nav-center { flex-direction: row; }
+.nav-brand { align-items: center; }
+/* Los enlaces venían en position:absolute con un translateX, para centrarlos
+   bajo la marca del proyecto de referencia. Aquí van en el flujo, a la derecha. */
+.nav-links {
+  position: static; transform: none; top: auto; left: auto; right: auto;
+}
+.nav-center { padding-top: 0; padding-bottom: 0; }
+/* Con el logo grande, los enlaces pegados a él se ven apretados: se centran
+   en el espacio que queda entre el logo y el botón de acceso. */
+.nav .nav-center { margin-left: auto; margin-right: auto; }
