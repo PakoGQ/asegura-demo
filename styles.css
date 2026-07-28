@@ -3015,7 +3015,11 @@ canvas { width: 100% !important; }
 .text-acento { color: var(--acento); }
 .text-muted { color: var(--t2); }
 .w-full { width: 100%; }
-.hidden { display: none !important; }
+/* `oculto`, no `hidden`: el HTML y app.js de este proyecto la nombran en
+   español. Venía del port como `.hidden` y no la usaba nadie, mientras que
+   `.oculto` se usaba en 3 elementos y 8 lugares de app.js sin existir — el
+   filtro de distancia y el mensaje de "ningún agente" salían siempre. */
+.oculto { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
 /* ═══════════════════════════════════════════════════════════

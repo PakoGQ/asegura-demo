@@ -58,8 +58,13 @@ function showToast(msg, tipo) {
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3200);
 }
 
-function openModal(id)  { const m = $('#' + id); if (m) m.classList.add('active'); }
-function closeModal(id) { const m = $('#' + id); if (m) m.classList.remove('active'); }
+// La clase es `open`, no `active`: así la nombra el CSS heredado, que la usa en
+// dos reglas — `.modal-overlay.open` (opacity y pointer-events) y
+// `.modal-overlay.open .modal` (la transición del panel). Con `active` el modal
+// recibía la clase y se quedaba en opacity:0 y pointer-events:none, o sea
+// invisible y sin recibir clics: el botón "no hacía nada".
+function openModal(id)  { const m = $('#' + id); if (m) m.classList.add('open'); }
+function closeModal(id) { const m = $('#' + id); if (m) m.classList.remove('open'); }
 
 function togglePassword(btn) {
   const input = btn.parentElement.querySelector('input');
