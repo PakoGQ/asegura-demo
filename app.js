@@ -467,6 +467,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   buildHero();
   buildGaleriaAgentes();
   initDirectorio();
+  initRamos();
+  initPostular();
   await initPerfil();
   inyectarAvisoDemo();
   inyectarDemoLogin();
@@ -2099,4 +2101,143 @@ function inyectarAvisoDemo() {
       fotos son ficticios. No es un servicio real y no hay nadie a quien contratar.</span>
     </div>`);
   document.body.classList.add('con-aviso-demo');
+}
+
+/* ===========================================================================
+   17. Ramos y zonas (ramos.html)
+   =========================================================================== */
+
+/* Qué cubre cada ramo, en palabras de alguien que no vende seguros. */
+const RAMOS_DESC = {
+  auto:           'Tu carro contra choque, robo y daños a terceros. El más común y el que casi todos ya traen.',
+  vida:           'Si te pasa algo, tu familia recibe una suma. Algunos además juntan ahorro con los años.',
+  gastos_medicos: 'Hospital, cirugías y tratamientos caros. Cubre lo que el seguro social no alcanza.',
+  hogar:          'Tu casa y lo que hay dentro: incendio, sismo, robo y daños a los vecinos.',
+  empresarial:    'Tu negocio: inventario, equipo, responsabilidad civil y las unidades de reparto.',
+  educativo:      'Un plan que junta dinero para la universidad de tus hijos, pase lo que pase.',
+  fianzas:        'Garantiza ante un tercero que vas a cumplir un contrato. Obligatorio en obra pública.',
+};
+
+function initRamos() {
+  const grid = $('#ramosGrid');
+  if (!grid) return;
+
+  // Cuántos agentes manejan cada ramo — el conteo sale de los datos, no fijo.
+  const cuenta = (r) => AGENTES.filter((a) => (a.ramos || []).includes(r)).length;
+
+  const ordenados = Object.entries(RAMOS).sort((a, b) => cuenta(b[0]) - cuenta(a[0]));
+
+  grid.innerHTML = ordenados.map(([k, v], i) => `
+    <a class="ramo-card ${i === 0 ? 'doble' : ''}" href="agentes.html?ramo=${k}"
+       style="--ramo-color:${v.color}">
+      <div class="ramo-card-fondo"></div>
+      <i class="fas ${v.icono} ramo-card-icono"></i>
+      <div class="ramo-card-info">
+        <h3>${esc(v.label)}</h3>
+        <p>${esc(RAMOS_DESC[k] || '')}</p>
+        <span class="ramo-card-count">
+          ${cuenta(k)} ${cuenta(k) === 1 ? 'agente lo maneja' : 'agentes lo manejan'}
+          <i class="fas fa-arrow-right"></i>
+        </span>
+      </div>
+    </a>`).join('');
+
+  // Zonas: se marca cuántos agentes hay en cada una para no prometer de más.
+  const zonas = CONFIG.ZONAS.slice(1);
+  $('#zonasGrid').innerHTML = zonas.map((z) => {
+    const n = AGENTES.filter((a) => a.zona === z).length;
+    return `
+      <a class="zona-card ${n ? '' : 'vacia'}" href="agentes.html?zona=${encodeURIComponent(z)}">
+        <i class="fas fa-location-dot"></i>
+        <div>
+          <strong>${esc(z)}</strong>
+          <span>${n ? `${n} ${n === 1 ? 'agente' : 'agentes'}` : 'Sin agentes por ahora'}</span>
+        </div>
+        <i class="fas fa-chevron-right zona-flecha"></i>
+      </a>`;
+  }).join('');
+
+  // Tags: lo que la gente busca, no nombres técnicos de producto.
+  const tags = [
+    { txt: 'Seguro de auto barato',        ramo: 'auto' },
+    { txt: 'Gastos médicos para la familia', ramo: 'gastos_medicos' },
+    { txt: 'Ahorro para la universidad',   ramo: 'educativo' },
+    { txt: 'Flotilla de la empresa',       ramo: 'empresarial' },
+    { txt: 'Seguro de vida con ahorro',    ramo: 'vida' },
+    { txt: 'Fianza de cumplimiento',       ramo: 'fianzas' },
+    { txt: 'Casa contra sismo',            ramo: 'hogar' },
+    { txt: 'Cambiar de aseguradora',       ramo: '' },
+    { txt: 'Revisar mi póliza actual',     ramo: '' },
+  ];
+  $('#tagsGrid').innerHTML = tags.map((t) =>
+    `<a class="tag" href="agentes.html${t.ramo ? '?ramo=' + t.ramo : ''}">${esc(t.txt)}</a>`).join('');
+}
+
+/* ===========================================================================
+   18. Postulación de agentes (unete.html)
+   =========================================================================== */
+function initPostular() {
+  const form = $('#formPostular');
+  if (!form) return;
+
+  $('#pRamos').innerHTML = Object.entries(RAMOS).map(([k, v]) => `
+    <label class="check-ramo">
+      <input type="checkbox" value="${k}" />
+      <i class="fas ${v.icono}"></i> ${esc(v.label)}
+    </label>`).join('');
+
+  $$('#pRamos .check-ramo').forEach((l) => {
+    const box = l.querySelector('input');
+    box.addEventListener('change', () => l.classList.toggle('activo', box.checked));
+  });
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = $('#pSubmit');
+    const err = $('#pError');
+    const fallar = (m) => { err.style.display = 'block'; err.querySelector('span').textContent = m; };
+
+    err.style.display = 'none';
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando…';
+
+    const restaurar = () => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar postulación';
+    };
+
+    const postulacion = {
+      nombre: $('#pNombre').value.trim(),
+      whatsapp: $('#pWa').value.trim(),
+      ciudad: $('#pCiudad').value.trim() || null,
+      cedula: $('#pCedula').value.trim() || null,
+      experiencia: $('#pExp').value,
+      ramos: $$('#pRamos input:checked').map((b) => b.value),
+      mensaje: $('#pMsg').value.trim() || null,
+      estado: 'nueva',
+    };
+
+    if (DEMO) {
+      // Sin base no se guarda nada. Decirlo, no simular que sí.
+      setTimeout(() => {
+        form.classList.add('oculto');
+        $('#pExito').classList.remove('oculto');
+        $('#pExito').insertAdjacentHTML('beforeend',
+          '<p class="pf-legal">Esto es una demostración: la postulación no se guardó.</p>');
+        restaurar();
+      }, 700);
+      return;
+    }
+
+    try {
+      const { error } = await sbClient.from('postulaciones').insert(postulacion);
+      if (error) throw error;
+      form.classList.add('oculto');
+      $('#pExito').classList.remove('oculto');
+    } catch (e) {
+      console.error(e);
+      fallar('No se pudo enviar. Intenta de nuevo o escríbenos por WhatsApp.');
+      restaurar();
+    }
+  });
 }

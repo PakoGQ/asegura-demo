@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Tipos de seguro y zonas — Asegura</title>
+  <meta name="description" content="Auto, vida, gastos médicos, hogar, empresarial, educativo y fianzas. Encuentra un agente por tipo de seguro o por zona de Guadalajara." />
+  <meta name="theme-color" content="#ee7203" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+</head>
+<body>
+
+<nav class="nav" id="mainNav">
+  <div class="nav-brand">
+    <a href="index.html" class="nav-logo" aria-label="Inicio"><span class="logo-marca"><i class="fas fa-shield-heart"></i></span></a>
+    <span class="nav-brand-title" data-marca>Asegura</span>
+  </div>
+  <div class="nav-center">
+    <ul class="nav-links">
+      <li><a href="index.html">Inicio</a></li>
+      <li><a href="agentes.html">Agentes</a></li>
+      <li><a href="ramos.html" class="active">Seguros</a></li>
+      <li><a href="unete.html">Únete</a></li>
+    </ul>
+  </div>
+  <div class="nav-cta">
+    <button class="login-key" onclick="openModal('loginModal')" aria-label="Acceso de agentes"><i class="fas fa-user-lock"></i></button>
+    <button class="nav-menu-btn" id="navMenuBtn" aria-label="Menú" aria-controls="mobileDrawer" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<div class="mobile-drawer-overlay" id="mobileDrawerOverlay" aria-hidden="true"></div>
+<aside class="mobile-drawer" id="mobileDrawer" aria-hidden="true">
+  <div class="mobile-drawer-head">
+    <span class="mobile-drawer-title">Menú</span>
+    <button class="mobile-drawer-close" id="mobileDrawerClose" aria-label="Cerrar menú"><i class="fas fa-times"></i></button>
+  </div>
+  <ul class="mobile-drawer-links">
+    <li><a href="index.html"><i class="fas fa-home"></i> Inicio</a></li>
+    <li><a href="agentes.html"><i class="fas fa-users"></i> Agentes</a></li>
+    <li><a href="ramos.html"><i class="fas fa-shield-halved"></i> Tipos de seguro</a></li>
+    <li><a href="unete.html"><i class="fas fa-id-badge"></i> Únete al equipo</a></li>
+    <li><a href="legal.html"><i class="fas fa-scale-balanced"></i> Legal</a></li>
+  </ul>
+</aside>
+
+<main class="dir-wrap">
+  <header class="dir-head">
+    <div>
+      <h1 class="dir-titulo">¿Qué necesitas <span class="acento">asegurar?</span></h1>
+      <p class="dir-sub">Elige el tipo de seguro y te mostramos quién lo maneja</p>
+    </div>
+  </header>
+
+  <!-- Tarjetas por ramo, la primera a doble ancho -->
+  <section class="ramos-destacados" id="ramosGrid"></section>
+
+  <section class="ramos-bloque">
+    <h2 class="seccion-titulo">Busca por <span class="acento">zona</span></h2>
+    <p class="dir-sub">Un agente que puede ir a tu casa o a tu negocio</p>
+    <div class="zonas-grid" id="zonasGrid"></div>
+  </section>
+
+  <section class="ramos-bloque">
+    <h2 class="seccion-titulo">Lo que más <span class="acento">buscan</span></h2>
+    <div class="tags-populares" id="tagsGrid"></div>
+  </section>
+
+  <section class="ramos-cta">
+    <h2>¿No sabes cuál te toca?</h2>
+    <p>Agenda con cualquier agente y te dice qué cubre cada uno, sin costo.</p>
+    <a href="agentes.html" class="btn btn-acento btn-lg"><i class="fas fa-users"></i> Ver todos los agentes</a>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="nav-logo"><span class="logo-marca"><i class="fas fa-shield-heart"></i></span></div>
+      <p>Agentes de seguros con cédula vigente. Encuentra al tuyo, agenda una asesoría y entiende tu póliza antes de firmarla.</p>
+    </div>
+    <div>
+      <p class="footer-heading">Plataforma</p>
+      <ul class="footer-links">
+        <li><a href="agentes.html">Agentes</a></li>
+        <li><a href="ramos.html">Tipos de seguro</a></li>
+        <li><a href="unete.html">Únete al equipo</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="footer-heading">Para agentes</p>
+      <ul class="footer-links">
+        <li><a href="panel-agente.html">Mi panel</a></li>
+        <li><a href="unete.html">Postularme</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="footer-heading">Legal</p>
+      <ul class="footer-links">
+        <li><a href="terminos.html">Términos de uso</a></li>
+        <li><a href="privacidad.html">Privacidad</a></li>
+        <li><a href="cookies.html">Cookies</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 · Guadalajara, Jalisco, México</span>
+    <span>Los agentes cuentan con cédula vigente ante la CNSF</span>
+  </div>
+</footer>
+
+<div class="modal-overlay" id="loginModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Acceso de agentes</h3>
+      <button class="modal-close" onclick="closeModal('loginModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <p class="modal-sub">Si eres cliente no necesitas cuenta.</p>
+    <div id="loginError" class="login-error"><i class="fas fa-circle-exclamation"></i> <span></span></div>
+    <div class="form-group">
+      <label class="form-label">Correo</label>
+      <input type="email" class="form-input" id="loginEmail" autocomplete="username" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña</label>
+      <div class="pass-wrap">
+        <input type="password" class="form-input" id="loginPass" onkeydown="if(event.key==='Enter')doLogin()" autocomplete="current-password" />
+        <button type="button" class="pass-toggle" onclick="togglePassword(this)"><i class="fas fa-eye"></i></button>
+      </div>
+    </div>
+    <button class="btn btn-acento w-full" onclick="doLogin()"><i class="fas fa-right-to-bracket"></i> Entrar</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<nav class="bottom-nav" aria-label="Navegación principal">
+  <a href="index.html" class="bottom-nav-item"><i class="fas fa-home"></i><span>Inicio</span></a>
+  <a href="agentes.html" class="bottom-nav-item"><i class="fas fa-users"></i><span>Agentes</span></a>
+  <a href="ramos.html" class="bottom-nav-item active"><i class="fas fa-shield-halved"></i><span>Seguros</span></a>
+  <a href="#" class="bottom-nav-item" onclick="event.preventDefault();openModal('loginModal')"><i class="fas fa-user"></i><span>Cuenta</span></a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
