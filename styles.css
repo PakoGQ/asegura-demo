@@ -1494,14 +1494,22 @@ p  { line-height: 1.7; color: var(--t2); }
 .review-text { font-size: .85rem; color: var(--t2); line-height: 1.6; }
 
 /* ─── Admin Panel ────────────────────────────────────────── */
+/* Este bloque viene del port, cuando el panel era flex y la barra superior era
+   `position: fixed`. Hoy el layout es el grid de más abajo (busca
+   `.admin-layout { display: grid`) y la barra es `sticky`, o sea que ya ocupa
+   su espacio. Se quitaron dos declaraciones que el bloque nuevo NO pisaba y
+   por eso seguían vivas:
+
+     · `padding-top: var(--nav-h)`  → 122px de aire muerto bajo la barra
+     · `.admin-sidebar { width: 260px }` → el aside se salía 28px de su
+       columna de grid (232px) y tapaba la primera letra del título
+
+   El resto de lo que queda aquí sí lo pisa el bloque nuevo; se conserva por
+   si algún día se usa esta hoja sin él.                                      */
 .admin-layout {
-  display: flex;
   min-height: 100vh;
-  padding-top: var(--nav-h);
 }
 .admin-sidebar {
-  width: 260px;
-  flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
   padding: 1.5rem 0;
@@ -2185,7 +2193,8 @@ canvas { width: 100% !important; }
 
 /* ─── Responsive ─────────────────────────────────────────── */
 @media (max-width: 1100px) {
-  .admin-sidebar { width: 220px; }
+  /* El ancho del menú lo fija la columna del grid, no el aside: ponerlo aquí
+     reproducía el desajuste de 260px vs 232px en este breakpoint. */
   .footer-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 768px) {
@@ -7974,7 +7983,10 @@ body { padding-top: var(--nav-h); }
   padding: .5rem 1.25rem; font-size: .8rem; font-weight: 600;
 }
 
-.admin-layout { display: grid; grid-template-columns: 232px 1fr; align-items: start; }
+/* El ancho del menú se define AQUÍ y en ningún otro lado: el aside llena su
+   columna solo. Si se le pone `width` al elemento, se desborda y tapa el
+   contenido sin que nada avise. */
+.admin-layout { display: grid; grid-template-columns: 210px 1fr; align-items: start; }
 .admin-sidebar {
   position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h)); overflow-y: auto;
   padding: 1rem .7rem; border-right: 1px solid var(--border); background: var(--surface);
