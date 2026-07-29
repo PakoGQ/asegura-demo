@@ -479,6 +479,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   inyectarDemoLogin();
   await initPanelDirector();
   await initPanelAgente();
+  await reflejarSesionEnPublico();
 
   // Marca en el navbar y el footer desde config: se cambia en un solo lugar.
   $$('[data-marca]').forEach((el) => { el.textContent = CONFIG.MARCA; });
@@ -4538,4 +4539,56 @@ function copiarSQLAlta(btn) {
   navigator.clipboard.writeText(sql)
     .then(() => { btn.innerHTML = '<i class="fas fa-check"></i> Copiado'; })
     .catch(() => showToast('No se pudo copiar. Selecciónalo a mano.'));
+}
+
+/* ===========================================================================
+   26. Sesión visible desde el sitio público
+
+   Desde el panel se puede volver al inicio con el logo, y la sesión sigue
+   abierta — vive en localStorage, navegar no la toca. El problema era el
+   regreso: el botón de cuenta abría el formulario de acceso aunque ya
+   estuvieras dentro, y parecía que te habían sacado.
+
+   Aquí se reapunta ese botón al panel que te toca por rol. Es solo comodidad:
+   quien de verdad protege los paneles es `guardPanel()` y, detrás, el RLS.
+   =========================================================================== */
+async function reflejarSesionEnPublico() {
+  // En los paneles no aplica: ahí el botón es "Salir".
+  if (!window.sbClient || $('#pdMain') || $('#paMain')) return;
+
+  // El botón de la barra y el de "Cuenta" del menú inferior llevan el onclick
+  // en línea en las 9 páginas públicas. Se buscan por ese atributo en vez de
+  // marcar cada archivo a mano; se descarta la X del propio modal, que también
+  // lo menciona.
+  const accesos = $$('.login-key, [onclick*="loginModal"]')
+    .filter((el) => !/closeModal/.test(el.getAttribute('onclick') || ''));
+  if (!accesos.length) return;
+
+  try {
+    const { data: s } = await sbClient.auth.getSession();
+    if (!s || !s.session) return;
+
+    const { data: usuario } = await sbClient
+      .from('usuarios').select('rol, nombre, activo')
+      .eq('auth_user_id', s.session.user.id).maybeSingle();
+    if (!usuario || !usuario.activo) return;
+
+    const destino = RUTA_INICIO[usuario.rol] || 'index.html';
+    const etiqueta = `Volver a mi panel (${esc(usuario.nombre || '')})`.trim();
+
+    accesos.forEach((el) => {
+      // Sustituye el onclick en línea que abre el modal de acceso.
+      el.onclick = (ev) => { ev.preventDefault(); location.href = destino; };
+      el.setAttribute('title', etiqueta);
+      el.setAttribute('aria-label', etiqueta);
+      el.classList.add('con-sesion');
+      const icono = el.querySelector('i');
+      if (icono) icono.className = 'fas fa-gauge-high';
+      const texto = el.querySelector('span');
+      if (texto) texto.textContent = 'Mi panel';
+    });
+  } catch (e) {
+    // Sin sesión legible se deja el botón como estaba: pedir acceso.
+    console.warn('No se pudo leer la sesión:', e.message);
+  }
 }

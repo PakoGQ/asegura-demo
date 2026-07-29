@@ -8651,3 +8651,11 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
   padding: .7rem .8rem; font-size: .78rem; line-height: 1.5; overflow-x: auto;
   white-space: pre; margin: .6rem 0;
 }
+
+/* El logo del panel ahora es un enlace al sitio público. Hereda el color para
+   no verse como un vínculo azul dentro de la barra. */
+a.panel-marca { text-decoration: none; color: inherit; }
+a.panel-marca:hover .logo-img { opacity: .82; transition: var(--transition); }
+
+/* Botón de acceso cuando ya hay sesión: deja de ofrecer entrar y ofrece volver. */
+.login-key.con-sesion { color: var(--acento); }
