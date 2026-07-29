@@ -1493,6 +1493,9 @@ async function initPanelDirector() {
     if (sec === 'agentes')   activarGestionAgentes();
     if (sec === 'dashboard') buildGraficasDirector();
     if (sec === 'cartera')   entrarACartera(() => { main.innerHTML = seccionCartera(true); });
+    if (sec === 'equipo' && !EQUIPO.cargado) {
+      cargarEquipo().then(() => { main.innerHTML = seccionEquipo(); });
+    }
   };
 
   $$('[data-sec]').forEach((b) => {
@@ -1796,6 +1799,7 @@ const SECCIONES_DIRECTOR = {
 
   // El Director ve la cartera de todo su equipo — con la columna de agente.
   cartera() { return seccionCartera(true); },
+  equipo()  { return seccionEquipo(); },
 
   config() {
     return `
@@ -1896,6 +1900,37 @@ function activarGestionAgentes() {
 let YO_AGENTE = null;
 let DISPONIBLE = true;
 
+/* Mi fila en `usuarios`. Es la que llevan `clientes.agente_id`,
+   `polizas.agente_id` y `actividad.agente_id`, así que hace falta para
+   escribir cualquier cosa de cartera. NO sale de la vista pública. */
+let MI_USUARIO_ID = null;
+
+/* `AGENTES` viene de `v_agentes_publico`, que a propósito no expone
+   `usuario_id`: es una vista pública y filtrar por ahí lo publicaría. Para
+   saber cuál de los agentes soy hay que preguntarle a la tabla `agentes` con
+   la sesión abierta; el RLS deja leer la propia fila.
+
+   Antes esto se resolvía con `AGENTES.find(a => a.usuario_id === ...)`, que
+   nunca encontraba nada porque esa columna no existe en la vista, y caía en
+   `AGENTES[0]`: cualquier agente que entrara veía el panel del primero. */
+async function identificarAgente(sesion) {
+  if (sesion.demo) { MI_USUARIO_ID = null; return AGENTES[0]; }
+  MI_USUARIO_ID = sesion.usuario.id;
+  if (!window.sbClient) return AGENTES[0];
+  try {
+    const { data, error } = await sbClient
+      .from('agentes').select('*').eq('usuario_id', sesion.usuario.id).maybeSingle();
+    if (error) throw error;
+    if (!data) return AGENTES[0];
+    // Se combina con la fila de la vista, que trae los agregados ya calculados
+    // (num_citas, num_resenas, ramos…) que la tabla no tiene.
+    return Object.assign({}, AGENTES.find((a) => a.id === data.id) || {}, data);
+  } catch (e) {
+    console.warn('No se pudo identificar al agente:', e.message);
+    return AGENTES[0];
+  }
+}
+
 async function initPanelAgente() {
   const main = $('#paMain');
   if (!main) return;
@@ -1903,7 +1938,7 @@ async function initPanelAgente() {
   const sesion = await guardPanel('agente');
   if (!sesion) return;
 
-  YO_AGENTE = sesion.demo ? AGENTES[0] : (AGENTES.find((a) => a.usuario_id === sesion.usuario.id) || AGENTES[0]);
+  YO_AGENTE = await identificarAgente(sesion);
   DISPONIBLE = !!YO_AGENTE.disponible;
 
   $('#paQuien').innerHTML = `<b>${esc(YO_AGENTE.nombre)}</b>${sesion.demo ? ' · demo' : ''}`;
@@ -1945,6 +1980,14 @@ async function initPanelAgente() {
     if (sec === 'citas') activarTabsCitas();
     if (sec === 'contenido') activarTabsCitas();
     if (sec === 'cartera') entrarACartera(() => { main.innerHTML = seccionCartera(false); });
+    if (sec === 'clientes') {
+      if (CLIENTES.cargado) activarClientes();
+      else cargarClientes().then(repintarClientes);
+    }
+    if (sec === 'actividad') {
+      if (ACTIVIDAD.cargado) activarActividad();
+      else cargarActividad().then(() => { main.innerHTML = seccionActividad(); activarActividad(); });
+    }
   };
 
   $$('[data-sec]').forEach((b) => {
@@ -2180,7 +2223,9 @@ const SECCIONES_AGENTE = {
 
   // El agente ve solo lo suyo: el RLS ya filtra las dos vistas, así que la
   // misma plantilla sirve sin la columna de agente, que aquí sobra.
-  cartera() { return seccionCartera(false); },
+  cartera()   { return seccionCartera(false); },
+  clientes()  { return seccionClientes(); },
+  actividad() { return seccionActividad(); },
 
   config() {
     return `
@@ -2513,7 +2558,9 @@ async function cargarCartera() {
   try {
     const [pol, opo] = await Promise.all([
       sbClient.from('v_polizas_detalle').select('*').order('fecha_vencimiento'),
-      sbClient.from('v_oportunidades_detalle').select('*').eq('estatus', 'abierta'),
+      // Abiertas = las que todavía hay que trabajar. Los valores del CHECK son
+      // nueva / en_proceso / ganada / descartada; no existe 'abierta'.
+      sbClient.from('v_oportunidades_detalle').select('*').in('estatus', ['nueva', 'en_proceso']),
     ]);
     if (pol.error) throw pol.error;
     if (opo.error) throw opo.error;
@@ -2892,7 +2939,7 @@ function pintarImportPaso1() {
   });
 }
 
-function procesarCSV(texto) {
+async function procesarCSV(texto) {
   const filas = parsearCSV(texto);
   if (filas.length < 2) {
     $('#impAviso').innerHTML = '<p class="imp-error">El archivo no tiene filas de datos.</p>';
@@ -2901,6 +2948,9 @@ function procesarCSV(texto) {
   IMPORT.cabeceras = filas[0];
   IMPORT.filas = filas.slice(1);
   IMPORT.mapa = adivinarMapeo(IMPORT.cabeceras);
+  // El Director necesita su equipo para poder elegir a quién asignarle la
+  // cartera. Si entró directo a Cartera sin pasar por Equipo, todavía no está.
+  if ($('#pdMain') && !EQUIPO.cargado) await cargarEquipo();
   pintarImportPaso2();
 }
 
@@ -2911,16 +2961,22 @@ function pintarImportPaso2() {
       `<option value="${i}" ${sel === i ? 'selected' : ''}>${esc(h || `columna ${i + 1}`)}</option>`).join('');
 
   // El Director elige a quién se le carga; el agente solo puede a sí mismo.
+  //
+  // La lista sale de `v_resumen_agente` y no de `AGENTES`: la vista pública no
+  // expone `usuario_id` —a propósito, es pública— y es justo la columna que
+  // llevan `clientes.agente_id` y `polizas.agente_id`. Filtrando `AGENTES` por
+  // ese campo el selector salía vacío y no se podía importar nada.
   const soyDirector = !!$('#pdMain');
-  const selectorAgente = soyDirector ? `
+  const equipo = EQUIPO.filas.filter((f) => f.usuario_id);
+  const selectorAgente = !soyDirector ? '' : (equipo.length ? `
     <div class="imp-campo">
       <label for="impAgente"><b>¿De quién es esta cartera?</b></label>
       <select id="impAgente">
-        ${AGENTES.filter((a) => a.usuario_id).map((a) =>
-          `<option value="${esc(a.usuario_id)}">${esc(a.nombre)}</option>`).join('')}
+        ${equipo.map((f) => `<option value="${esc(f.usuario_id)}">${esc(f.agente_nombre)}</option>`).join('')}
       </select>
       <p class="modal-texto imp-nota">Todas las pólizas del archivo se le asignan a esta persona.</p>
-    </div>` : '';
+    </div>`
+    : '<p class="imp-error">No se pudo cargar tu equipo. Recarga la página e intenta de nuevo.</p>');
 
   $('#impCuerpo').innerHTML = `
     <p class="modal-texto">
@@ -2953,7 +3009,7 @@ function pintarImportPaso2() {
   $('#impRevisar').addEventListener('click', () => {
     const falta = COLUMNAS_IMPORT.filter((c) => c.obligatoria && IMPORT.mapa[c.clave] === undefined);
     if (falta.length) { pintarImportPaso2(); return; }
-    IMPORT.agenteId = soyDirector ? $('#impAgente').value : (YO_AGENTE && YO_AGENTE.usuario_id);
+    IMPORT.agenteId = soyDirector ? $('#impAgente').value : MI_USUARIO_ID;
     IMPORT.validadas = IMPORT.filas.map((f, i) => validarFila(f, IMPORT.mapa, i + 2));
     pintarImportPaso3();
   });
@@ -3100,4 +3156,401 @@ function recargarSeccionCartera() {
 function entrarACartera(repintar) {
   if (CARTERA.cargado) { activarTabsCartera(); return; }
   cargarCartera().then(() => { repintar(); activarTabsCartera(); });
+}
+
+/* ===========================================================================
+   21. Cartera — pantallas portadas de la mini-app vieja
+
+   Equipo (Director) · Clientes y Actividad (Agente). Se apoyan en la misma
+   `v_resumen_agente` y en las tablas `clientes` y `actividad` que ya usaba
+   `cartera/`, pero pintadas con los componentes del panel.
+   =========================================================================== */
+
+const EQUIPO = { filas: [], cargado: false, error: '' };
+
+async function cargarEquipo() {
+  if (!window.sbClient) { EQUIPO.error = 'Sin conexión a la base.'; EQUIPO.cargado = true; return; }
+  try {
+    const { data, error } = await sbClient
+      .from('v_resumen_agente').select('*').order('prima_bajo_gestion', { ascending: false });
+    if (error) throw error;
+    EQUIPO.filas = data || [];
+    EQUIPO.error = '';
+  } catch (e) {
+    EQUIPO.error = e.message || 'No se pudo leer el equipo.';
+    console.warn('Equipo:', e);
+  }
+  EQUIPO.cargado = true;
+}
+
+function seccionEquipo() {
+  if (!EQUIPO.cargado) return '<p class="admin-vacio"><i class="fas fa-spinner fa-spin"></i> Cargando equipo…</p>';
+  if (EQUIPO.error)   return `<p class="admin-vacio">${esc(EQUIPO.error)}</p>`;
+  if (!EQUIPO.filas.length) return `
+    <h1 class="admin-page-title">Equipo</h1>
+    <p class="admin-page-sub">Cómo va la cartera de cada quien</p>
+    <p class="admin-vacio">Todavía no hay agentes con cartera.</p>`;
+
+  const total = (campo) => EQUIPO.filas.reduce((s, f) => s + Number(f[campo] || 0), 0);
+
+  return `
+    <h1 class="admin-page-title">Equipo</h1>
+    <p class="admin-page-sub">Cómo va la cartera de cada quien</p>
+
+    <div class="kpi-grid">
+      ${kpi('fa-file-contract', 'Pólizas del equipo', total('polizas_vigentes'), 'vigentes')}
+      ${kpi('fa-coins', 'Prima bajo gestión', money(total('prima_bajo_gestion')), 'suma del equipo')}
+      ${kpi('fa-triangle-exclamation', 'Vencen en 30 días', total('vencen_30d'), 'de todo el equipo',
+            total('vencen_30d') ? 'alerta' : '')}
+      ${kpi('fa-lightbulb', 'Oportunidades nuevas', total('oportunidades_nuevas'), 'sin trabajar')}
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead><tr>
+          <th>Agente</th><th>Zona</th>
+          <th class="col-num">Pólizas</th><th class="col-num">Prima</th>
+          <th class="col-num">Vencen 30d</th><th class="col-num">Oportunidades</th>
+          <th class="col-num">Actividad 30d</th><th>Estado</th>
+        </tr></thead>
+        <tbody>
+          ${EQUIPO.filas.map((f) => {
+            const inactivo = f.suspended || !f.activo;
+            return `<tr>
+              <td><b>${esc(f.agente_nombre)}</b><br><span class="tabla-sub">${esc(f.email || '')}</span></td>
+              <td>${esc(f.zona || '—')}</td>
+              <td class="col-num">${f.polizas_vigentes || 0}</td>
+              <td class="col-num">${money(f.prima_bajo_gestion)}</td>
+              <td class="col-num">${Number(f.vencen_30d) ? `<span class="pill pill-warn pill-sm">${f.vencen_30d}</span>` : '0'}</td>
+              <td class="col-num">${Number(f.oportunidades_nuevas) || 0}</td>
+              <td class="col-num">${Number(f.actividad_30d) === 0 && Number(f.polizas_vigentes) > 0
+                    ? '<span class="pill pill-err pill-sm">0</span>' : (f.actividad_30d || 0)}</td>
+              <td><span class="pill ${inactivo ? 'pill-off' : 'pill-ok'} pill-sm">
+                    ${f.suspended ? 'Suspendido' : f.activo ? 'Activo' : 'Inactivo'}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="admin-nota"><i class="fas fa-circle-info"></i>
+      «Actividad 30d» en rojo es un agente con pólizas a su nombre que no ha
+      registrado un solo contacto en el último mes. Es la señal más temprana de
+      una cartera que se va a caer en la renovación.</p>`;
+}
+
+/* ── Clientes (panel del Agente) ─────────────────────────────────────────── */
+const CLIENTES = { filas: [], cargado: false, error: '', filtro: '' };
+
+async function cargarClientes() {
+  if (!window.sbClient) { CLIENTES.error = 'Sin conexión a la base.'; CLIENTES.cargado = true; return; }
+  try {
+    // El RLS ya limita a los propios; no hace falta filtrar por agente aquí.
+    const { data, error } = await sbClient
+      .from('clientes').select('id, nombre, telefono, email, rfc, created_at').order('nombre');
+    if (error) throw error;
+    CLIENTES.filas = data || [];
+    CLIENTES.error = '';
+  } catch (e) {
+    CLIENTES.error = e.message || 'No se pudieron leer los clientes.';
+    console.warn('Clientes:', e);
+  }
+  CLIENTES.cargado = true;
+}
+
+function seccionClientes() {
+  if (!CLIENTES.cargado) return '<p class="admin-vacio"><i class="fas fa-spinner fa-spin"></i> Cargando clientes…</p>';
+  if (CLIENTES.error)   return `<p class="admin-vacio">${esc(CLIENTES.error)}</p>`;
+
+  const q = normaliza(CLIENTES.filtro);
+  const lista = q ? CLIENTES.filas.filter((c) =>
+    normaliza(c.nombre).includes(q) || String(c.telefono || '').includes(CLIENTES.filtro.trim())) : CLIENTES.filas;
+
+  return `
+    <h1 class="admin-page-title">Mis clientes</h1>
+    <p class="admin-page-sub">${CLIENTES.filas.length} en tu cartera</p>
+
+    <div class="admin-acciones-top cli-barra">
+      <input class="form-input cli-buscar" id="cliBuscar" placeholder="Buscar por nombre o teléfono…"
+             value="${esc(CLIENTES.filtro)}" />
+      <button class="btn btn-acento btn-sm" onclick="abrirNuevoCliente()">
+        <i class="fas fa-user-plus"></i> Nuevo cliente
+      </button>
+    </div>
+
+    ${lista.length ? `
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>Cliente</th><th>Teléfono</th><th>Correo</th><th>RFC</th><th></th></tr></thead>
+          <tbody>
+            ${lista.map((c) => `<tr>
+              <td><b>${esc(c.nombre)}</b></td>
+              <td class="col-num">${esc(c.telefono || '—')}</td>
+              <td>${esc(c.email || '—')}</td>
+              <td class="col-num">${esc(c.rfc || '—')}</td>
+              <td>${c.telefono ? `<a class="btn btn-ghost btn-sm" target="_blank" rel="noopener"
+                    href="https://wa.me/${esc(String(c.telefono).replace(/\D/g, ''))}">
+                    <i class="fab fa-whatsapp"></i></a>` : ''}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`
+    : `<p class="admin-vacio">${CLIENTES.filas.length
+        ? 'Ningún cliente coincide con esa búsqueda.'
+        : 'Todavía no tienes clientes. Impórtalos desde Cartera o da de alta uno aquí.'}</p>`}`;
+}
+
+/* Un solo punto de repintado: la sección se vuelve a generar y se reengancha
+   sola. Evita pasar la función a sí misma por parámetro. */
+function repintarClientes() {
+  const main = $('#paMain');
+  if (!main) return;
+  main.innerHTML = seccionClientes();
+  activarClientes();
+}
+
+function activarClientes() {
+  const inp = $('#cliBuscar');
+  if (!inp) return;
+  inp.addEventListener('input', () => {
+    CLIENTES.filtro = inp.value;
+    repintarClientes();
+    // Repintar reemplaza el input, así que hay que devolver el foco y dejar el
+    // cursor al final o se escribe al revés.
+    const nuevo = $('#cliBuscar');
+    if (nuevo) { nuevo.focus(); nuevo.setSelectionRange(nuevo.value.length, nuevo.value.length); }
+  });
+}
+
+function abrirNuevoCliente() {
+  if (!$('#modalCliente')) {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal-overlay" id="modalCliente">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 class="modal-title">Nuevo cliente</h3>
+            <button class="modal-close" onclick="closeModal('modalCliente')"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nombre *</label>
+            <input class="form-input" id="cliNombre" autocomplete="off" />
+          </div>
+          <div class="imp-mapeo">
+            <div class="form-group"><label class="form-label">Teléfono</label>
+              <input class="form-input" id="cliTel" placeholder="+52..." /></div>
+            <div class="form-group"><label class="form-label">Correo</label>
+              <input class="form-input" id="cliMail" type="email" /></div>
+            <div class="form-group"><label class="form-label">RFC</label>
+              <input class="form-input" id="cliRfc" /></div>
+            <div class="form-group"><label class="form-label">Fecha de nacimiento</label>
+              <input class="form-input" id="cliNac" type="date" /></div>
+          </div>
+          <div class="modal-acciones">
+            <button class="btn btn-ghost btn-sm" onclick="closeModal('modalCliente')">Cancelar</button>
+            <button class="btn btn-acento btn-sm" id="cliGuardar">
+              <i class="fas fa-floppy-disk"></i> Guardar
+            </button>
+          </div>
+          <div id="cliAviso"></div>
+        </div>
+      </div>`);
+    $('#cliGuardar').addEventListener('click', guardarCliente);
+  }
+  ['cliNombre', 'cliTel', 'cliMail', 'cliRfc', 'cliNac'].forEach((id) => { if ($('#' + id)) $('#' + id).value = ''; });
+  $('#cliAviso').innerHTML = '';
+  openModal('modalCliente');
+  $('#cliNombre').focus();
+}
+
+async function guardarCliente() {
+  const aviso = $('#cliAviso');
+  const nombre = $('#cliNombre').value.trim();
+  if (!nombre) { aviso.innerHTML = '<p class="imp-error">El nombre es obligatorio.</p>'; return; }
+  if (!window.sbClient || !MI_USUARIO_ID) {
+    aviso.innerHTML = '<p class="imp-error">No se pudo identificar tu cuenta.</p>'; return;
+  }
+  const btn = $('#cliGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
+  try {
+    const { error } = await sbClient.from('clientes').insert({
+      agente_id: MI_USUARIO_ID,
+      nombre,
+      telefono: $('#cliTel').value.trim() || null,
+      email: $('#cliMail').value.trim() || null,
+      rfc: $('#cliRfc').value.trim() || null,
+      fecha_nacimiento: $('#cliNac').value || null,
+    });
+    if (error) throw error;
+    CLIENTES.cargado = false;
+    await cargarClientes();
+    closeModal('modalCliente');
+    repintarClientes();
+  } catch (e) {
+    aviso.innerHTML = `<p class="imp-error">No se pudo guardar: ${esc(e.message || 'error')}</p>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Guardar';
+  }
+}
+
+/* ── Actividad (panel del Agente) ────────────────────────────────────────────
+   Cada llamada, WhatsApp o visita que se registra aquí es lo que alimenta la
+   regla de «póliza que vence sin contacto reciente» y la columna en rojo del
+   panel de Equipo. Sin esto la cartera es una lista muerta.                  */
+const ACTIVIDAD = { filas: [], clientes: [], cargado: false, error: '' };
+
+const TIPO_ACTIVIDAD = {
+  llamada:    { txt: 'Llamada',     icono: 'fa-phone' },
+  whatsapp:   { txt: 'WhatsApp',    icono: 'fa-whatsapp' },
+  visita:     { txt: 'Visita',      icono: 'fa-handshake' },
+  cotizacion: { txt: 'Cotización',  icono: 'fa-file-invoice-dollar' },
+  renovacion: { txt: 'Renovación',  icono: 'fa-rotate' },
+  siniestro:  { txt: 'Siniestro',   icono: 'fa-car-burst' },
+};
+
+const RESULTADO_ACTIVIDAD = {
+  pendiente:     { txt: 'Pendiente',     clase: 'pill-warn' },
+  cerrado:       { txt: 'Cerrado',       clase: 'pill-ok'   },
+  sin_respuesta: { txt: 'Sin respuesta', clase: 'pill-off'  },
+  rechazado:     { txt: 'Rechazado',     clase: 'pill-err'  },
+};
+
+async function cargarActividad() {
+  if (!window.sbClient) { ACTIVIDAD.error = 'Sin conexión a la base.'; ACTIVIDAD.cargado = true; return; }
+  try {
+    const [act, cli] = await Promise.all([
+      sbClient.from('actividad')
+        .select('id, cliente_id, tipo, descripcion, fecha, resultado')
+        .order('fecha', { ascending: false }).limit(100),
+      sbClient.from('clientes').select('id, nombre').order('nombre'),
+    ]);
+    if (act.error) throw act.error;
+    if (cli.error) throw cli.error;
+    ACTIVIDAD.clientes = cli.data || [];
+    const porId = new Map(ACTIVIDAD.clientes.map((c) => [c.id, c.nombre]));
+    ACTIVIDAD.filas = (act.data || []).map((a) => ({ ...a, cliente_nombre: porId.get(a.cliente_id) || '—' }));
+    ACTIVIDAD.error = '';
+  } catch (e) {
+    ACTIVIDAD.error = e.message || 'No se pudo leer la actividad.';
+    console.warn('Actividad:', e);
+  }
+  ACTIVIDAD.cargado = true;
+}
+
+function seccionActividad() {
+  if (!ACTIVIDAD.cargado) return '<p class="admin-vacio"><i class="fas fa-spinner fa-spin"></i> Cargando actividad…</p>';
+  if (ACTIVIDAD.error)   return `<p class="admin-vacio">${esc(ACTIVIDAD.error)}</p>`;
+
+  const cuando = (f) => {
+    const d = Math.round((Date.now() - new Date(f)) / 86400000);
+    return d <= 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`;
+  };
+
+  return `
+    <h1 class="admin-page-title">Actividad</h1>
+    <p class="admin-page-sub">Lo que has hecho con tus clientes</p>
+
+    ${ACTIVIDAD.clientes.length ? `
+      <section class="admin-card">
+        <h2>Registrar un contacto</h2>
+        <div class="act-chips" id="actChips">
+          ${Object.entries(TIPO_ACTIVIDAD).map(([k, v], i) => `
+            <button type="button" class="chip-tipo ${i === 0 ? 'activo' : ''}" data-tipo="${k}">
+              <i class="fa${k === 'whatsapp' ? 'b' : 's'} ${v.icono}"></i> ${v.txt}
+            </button>`).join('')}
+        </div>
+        <div class="imp-mapeo">
+          <div class="form-group">
+            <label class="form-label">Cliente *</label>
+            <select class="form-input" id="actCliente">
+              ${ACTIVIDAD.clientes.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Resultado</label>
+            <select class="form-input" id="actResultado">
+              <option value="">— sin definir —</option>
+              ${Object.entries(RESULTADO_ACTIVIDAD).map(([k, v]) =>
+                `<option value="${k}">${v.txt}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">¿Qué pasó? *</label>
+          <input class="form-input" id="actDescripcion" placeholder="Le llamé para la renovación; pidió que le marque el lunes." />
+        </div>
+        <button class="btn btn-acento btn-sm" id="actGuardar">
+          <i class="fas fa-plus"></i> Registrar
+        </button>
+        <div id="actAviso"></div>
+      </section>`
+    : '<p class="admin-vacio">Primero necesitas clientes. Impórtalos desde Cartera o da de alta uno en Mis clientes.</p>'}
+
+    <section class="admin-card">
+      <h2>Historial</h2>
+      ${ACTIVIDAD.filas.length ? `
+        <ul class="act-lista">
+          ${ACTIVIDAD.filas.map((a) => {
+            const t = TIPO_ACTIVIDAD[a.tipo] || { txt: a.tipo, icono: 'fa-circle' };
+            const r = RESULTADO_ACTIVIDAD[a.resultado];
+            return `<li class="act-item">
+              <span class="act-icono"><i class="fa${a.tipo === 'whatsapp' ? 'b' : 's'} ${t.icono}"></i></span>
+              <div class="act-cuerpo">
+                <div class="act-cabeza">
+                  <b>${esc(a.cliente_nombre)}</b>
+                  <span class="tabla-sub">${t.txt} · ${cuando(a.fecha)}</span>
+                </div>
+                <p class="act-texto">${esc(a.descripcion)}</p>
+              </div>
+              ${r ? `<span class="pill ${r.clase} pill-sm">${r.txt}</span>` : ''}
+            </li>`;
+          }).join('')}
+        </ul>`
+      : '<p class="admin-vacio">Sin actividad registrada todavía.</p>'}
+    </section>`;
+}
+
+function activarActividad() {
+  const chips = $$('#actChips .chip-tipo');
+  chips.forEach((c) => c.addEventListener('click', () =>
+    chips.forEach((x) => x.classList.toggle('activo', x === c))));
+
+  const btn = $('#actGuardar');
+  if (btn) btn.addEventListener('click', guardarActividad);
+}
+
+async function guardarActividad() {
+  const aviso = $('#actAviso');
+  const desc = $('#actDescripcion').value.trim();
+  const cliente = $('#actCliente').value;
+  const activo = $('#actChips .chip-tipo.activo');
+
+  if (!desc)    { aviso.innerHTML = '<p class="imp-error">Escribe qué pasó.</p>'; return; }
+  if (!cliente) { aviso.innerHTML = '<p class="imp-error">Elige un cliente.</p>'; return; }
+  if (!window.sbClient || !MI_USUARIO_ID) {
+    aviso.innerHTML = '<p class="imp-error">No se pudo identificar tu cuenta.</p>'; return;
+  }
+
+  const btn = $('#actGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando…';
+  try {
+    const { error } = await sbClient.from('actividad').insert({
+      agente_id: MI_USUARIO_ID,
+      cliente_id: cliente,
+      tipo: activo ? activo.dataset.tipo : 'llamada',
+      descripcion: desc,
+      resultado: $('#actResultado').value || null,
+    });
+    if (error) throw error;
+    ACTIVIDAD.cargado = false;
+    await cargarActividad();
+    const main = $('#paMain');
+    if (main) { main.innerHTML = seccionActividad(); activarActividad(); }
+  } catch (e) {
+    aviso.innerHTML = `<p class="imp-error">No se pudo registrar: ${esc(e.message || 'error')}</p>`;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-plus"></i> Registrar';
+  }
 }

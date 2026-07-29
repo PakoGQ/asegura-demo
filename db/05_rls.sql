@@ -300,6 +300,41 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Excepción para la importación de cartera (28-jul-2026)
+--
+-- La regla de arriba deja al Director en solo lectura, a propósito. Pero el
+-- equipo llega con su cartera en Excel y quien la carga al arrancar es él: si
+-- depende de que cuatro agentes lo hagan cada uno por su lado, no se hace, y
+-- sin cartera cargada el CRM no sirve de nada.
+--
+-- Se abre lo mínimo: puede INSERTAR y ACTUALIZAR clientes y pólizas de su
+-- equipo —insertar para la carga inicial, actualizar para reimportar y
+-- corregir—, pero NO borrar. Y no se toca `actividad`: el registro de contacto
+-- es del agente que lo hizo y nadie más debe escribir ahí en su nombre.
+-- ---------------------------------------------------------------------------
+do $$
+declare t text;
+begin
+  foreach t in array array['clientes', 'polizas']
+  loop
+    execute format('drop policy if exists %I on public.%I', t || '_director_insert', t);
+    execute format($f$
+      create policy %I on public.%I
+        for insert to authenticated
+        with check (public.es_de_mi_equipo(agente_id))
+    $f$, t || '_director_insert', t);
+
+    execute format('drop policy if exists %I on public.%I', t || '_director_update', t);
+    execute format($f$
+      create policy %I on public.%I
+        for update to authenticated
+        using (public.es_de_mi_equipo(agente_id))
+        with check (public.es_de_mi_equipo(agente_id))
+    $f$, t || '_director_update', t);
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- oportunidades — el agente cambia el estatus, nadie las inserta a mano.
 -- Las crea el motor de reglas (06_funciones.sql), que corre como definer.
 -- ---------------------------------------------------------------------------

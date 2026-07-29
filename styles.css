@@ -8568,3 +8568,34 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
   .imp-mapeo   { grid-template-columns: 1fr; }
   .imp-resumen { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Clientes y Actividad ── */
+.cli-barra   { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.cli-buscar  { flex: 1; min-width: 200px; max-width: 380px; }
+
+/* Chips de tipo de contacto. Mismo lenguaje que los chips de zona del
+   buscador público, para no inventar un control nuevo. */
+.act-chips   { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+.chip-tipo {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .4rem .75rem; border: 1px solid var(--border); border-radius: 99px;
+  background: var(--card); color: var(--t2); font: inherit; font-size: .8rem;
+  font-weight: 600; cursor: pointer; transition: var(--transition);
+}
+.chip-tipo:hover  { border-color: var(--acento); color: var(--acento-dk); }
+.chip-tipo.activo { background: var(--acento); border-color: var(--acento); color: #fff; }
+
+.act-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.act-item {
+  display: flex; align-items: flex-start; gap: .75rem;
+  padding: .8rem 0; border-bottom: 1px solid var(--border);
+}
+.act-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.act-icono {
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--surface); color: var(--acento); font-size: .82rem;
+}
+.act-cuerpo  { flex: 1; min-width: 0; }
+.act-cabeza  { display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
+.act-texto   { margin: .2rem 0 0; color: var(--t2); font-size: .85rem; line-height: 1.5; }
