@@ -1507,8 +1507,9 @@ async function initPanelDirector() {
     if (sec === 'postulaciones') activarPostulaciones();
     if (sec === 'dashboard') buildGraficasDirector();
     if (sec === 'cartera')   entrarACartera(() => { main.innerHTML = seccionCartera(true); });
-    if (sec === 'equipo' && !EQUIPO.cargado) {
-      cargarEquipo().then(() => { main.innerHTML = seccionEquipo(); });
+    if (sec === 'equipo') {
+      if (EQUIPO.cargado) activarEquipo();
+      else cargarEquipo().then(() => { main.innerHTML = seccionEquipo(); activarEquipo(); });
     }
   };
 
@@ -3307,15 +3308,28 @@ function entrarACartera(repintar) {
    `cartera/`, pero pintadas con los componentes del panel.
    =========================================================================== */
 
-const EQUIPO = { filas: [], cargado: false, error: '' };
+const EQUIPO = { filas: [], actividad: [], cargado: false, error: '' };
 
 async function cargarEquipo() {
   if (!window.sbClient) { EQUIPO.error = 'Sin conexión a la base.'; EQUIPO.cargado = true; return; }
+  const hace30 = new Date(Date.now() - 30 * 86400000).toISOString();
   try {
-    const { data, error } = await sbClient
-      .from('v_resumen_agente').select('*').order('prima_bajo_gestion', { ascending: false });
-    if (error) throw error;
-    EQUIPO.filas = data || [];
+    // La cartera hace falta para poder desglosar los números al hacer clic;
+    // sin ella la tabla se vería igual pero las celdas no abrirían nada.
+    const [resumen, act, cli] = await Promise.all([
+      sbClient.from('v_resumen_agente').select('*').order('prima_bajo_gestion', { ascending: false }),
+      sbClient.from('actividad')
+        .select('id, agente_id, cliente_id, tipo, descripcion, fecha, resultado')
+        .gte('fecha', hace30).order('fecha', { ascending: false }),
+      sbClient.from('clientes').select('id, nombre'),
+      CARTERA.cargado ? Promise.resolve() : cargarCartera(),
+    ]);
+    if (resumen.error) throw resumen.error;
+    if (act.error)     throw act.error;
+    if (cli.error)     throw cli.error;
+    EQUIPO.filas = resumen.data || [];
+    const nombre = new Map((cli.data || []).map((c) => [c.id, c.nombre]));
+    EQUIPO.actividad = (act.data || []).map((a) => ({ ...a, cliente_nombre: nombre.get(a.cliente_id) || '—' }));
     EQUIPO.error = '';
   } catch (e) {
     EQUIPO.error = e.message || 'No se pudo leer el equipo.';
@@ -3323,6 +3337,34 @@ async function cargarEquipo() {
   }
   EQUIPO.cargado = true;
 }
+
+/* Los mismos filtros que usa `v_resumen_agente` para contar. Se definen una
+   sola vez y los usan la tabla y el desglose: si divergen, el número de la
+   celda no coincide con lo que se abre al hacer clic, que es peor que no
+   poder hacer clic. */
+const VIVA = (p) => p.estatus === 'activa' || p.estatus === 'por_vencer';
+
+const DETALLE_EQUIPO = {
+  polizas: {
+    titulo: 'Pólizas vigentes',
+    filtrar: (id) => CARTERA.polizas.filter((p) => p.agente_id === id && VIVA(p)),
+  },
+  vencen: {
+    // Sin límite inferior, igual que la vista: una póliza ya vencida y sin
+    // renovar sigue siendo trabajo pendiente, no algo que deba desaparecer.
+    titulo: 'Vencen en 30 días',
+    filtrar: (id) => CARTERA.polizas.filter((p) => p.agente_id === id && VIVA(p) &&
+      diasPara(p.fecha_vencimiento) <= 30),
+  },
+  oportunidades: {
+    titulo: 'Oportunidades abiertas',
+    filtrar: (id) => CARTERA.oportunidades.filter((o) => o.agente_id === id),
+  },
+  actividad: {
+    titulo: 'Actividad de los últimos 30 días',
+    filtrar: (id) => EQUIPO.actividad.filter((a) => a.agente_id === id),
+  },
+};
 
 function seccionEquipo() {
   if (!EQUIPO.cargado) return '<p class="admin-vacio"><i class="fas fa-spinner fa-spin"></i> Cargando equipo…</p>';
@@ -3357,15 +3399,26 @@ function seccionEquipo() {
         <tbody>
           ${EQUIPO.filas.map((f) => {
             const inactivo = f.suspended || !f.activo;
+            // Abiertas = nuevas + en proceso, el mismo criterio que Cartera.
+            // La vista las cuenta por separado; si aquí se usara solo
+            // `oportunidades_nuevas`, el desglose mostraría más de las que
+            // dice el número.
+            const oport = Number(f.oportunidades_nuevas || 0) + Number(f.oportunidades_en_proceso || 0);
+            const abridor = (tipo, n, dentro) => Number(n) > 0
+              ? `<button class="celda-link" data-agente-id="${esc(f.usuario_id)}" data-detalle="${tipo}"
+                   title="Ver el detalle">${dentro}</button>`
+              : dentro;
             return `<tr>
               <td><b>${esc(f.agente_nombre)}</b><br><span class="tabla-sub">${esc(f.email || '')}</span></td>
               <td>${esc(f.zona || '—')}</td>
-              <td class="col-num">${f.polizas_vigentes || 0}</td>
+              <td class="col-num">${abridor('polizas', f.polizas_vigentes, String(f.polizas_vigentes || 0))}</td>
               <td class="col-num">${money(f.prima_bajo_gestion)}</td>
-              <td class="col-num">${Number(f.vencen_30d) ? `<span class="pill pill-warn pill-sm">${f.vencen_30d}</span>` : '0'}</td>
-              <td class="col-num">${Number(f.oportunidades_nuevas) || 0}</td>
-              <td class="col-num">${Number(f.actividad_30d) === 0 && Number(f.polizas_vigentes) > 0
-                    ? '<span class="pill pill-err pill-sm">0</span>' : (f.actividad_30d || 0)}</td>
+              <td class="col-num">${abridor('vencen', f.vencen_30d,
+                    Number(f.vencen_30d) ? `<span class="pill pill-warn pill-sm">${f.vencen_30d}</span>` : '0')}</td>
+              <td class="col-num">${abridor('oportunidades', oport, String(oport))}</td>
+              <td class="col-num">${abridor('actividad', f.actividad_30d,
+                    Number(f.actividad_30d) === 0 && Number(f.polizas_vigentes) > 0
+                      ? '<span class="pill pill-err pill-sm">0</span>' : String(f.actividad_30d || 0))}</td>
               <td><span class="pill ${inactivo ? 'pill-off' : 'pill-ok'} pill-sm">
                     ${f.suspended ? 'Suspendido' : f.activo ? 'Activo' : 'Inactivo'}</span></td>
             </tr>`;
@@ -3375,9 +3428,104 @@ function seccionEquipo() {
     </div>
 
     <p class="admin-nota"><i class="fas fa-circle-info"></i>
-      «Actividad 30d» en rojo es un agente con pólizas a su nombre que no ha
-      registrado un solo contacto en el último mes. Es la señal más temprana de
-      una cartera que se va a caer en la renovación.</p>`;
+      Los números subrayados se abren: dale clic y ves exactamente qué pólizas,
+      qué vencimientos o qué contactos hay detrás, para poder decirle al agente
+      en qué tiene que trabajar. «Actividad 30d» en rojo es un agente con
+      pólizas a su nombre que no ha registrado un solo contacto en el último
+      mes: la señal más temprana de una cartera que se va a caer en la
+      renovación.</p>`;
+}
+
+/* ── Desglose de una celda de Equipo ──────────────────────────────────────── */
+function activarEquipo() {
+  $$('.celda-link').forEach((b) => b.addEventListener('click', () =>
+    abrirDetalleEquipo(b.dataset.agenteId, b.dataset.detalle)));
+}
+
+function abrirDetalleEquipo(usuarioId, tipo) {
+  const def = DETALLE_EQUIPO[tipo];
+  const fila = EQUIPO.filas.find((f) => f.usuario_id === usuarioId);
+  if (!def || !fila) return;
+  const datos = def.filtrar(usuarioId);
+
+  const tabla = (cabeceras, filas) => `
+    <div class="admin-table-wrap detalle-tabla">
+      <table class="admin-table">
+        <thead><tr>${cabeceras.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
+        <tbody>${filas.join('')}</tbody>
+      </table>
+    </div>`;
+
+  let cuerpo;
+  if (!datos.length) {
+    cuerpo = '<p class="admin-vacio">Nada que mostrar aquí.</p>';
+  } else if (tipo === 'polizas' || tipo === 'vencen') {
+    const total = datos.reduce((s, p) => s + Number(p.prima_anual || 0), 0);
+    cuerpo = tabla(['Cliente', 'Ramo', 'Póliza', 'Prima', 'Vence', tipo === 'vencen' ? 'Faltan' : 'Estatus'],
+      datos.slice().sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento)).map((p) => {
+        const d = diasPara(p.fecha_vencimiento);
+        const e = ESTATUS_POLIZA[p.estatus] || { txt: p.estatus, clase: 'pill-off' };
+        return `<tr>
+          <td><b>${esc(p.cliente_nombre)}</b>${p.cliente_telefono
+              ? `<br><a class="tabla-sub" target="_blank" rel="noopener"
+                   href="https://wa.me/${esc(String(p.cliente_telefono).replace(/\D/g, ''))}">
+                   <i class="fab fa-whatsapp"></i> ${esc(p.cliente_telefono)}</a>` : ''}</td>
+          <td>${esc((RAMOS[p.ramo] || {}).label || p.ramo)}</td>
+          <td class="col-num">${esc(p.numero_poliza)}</td>
+          <td class="col-num">${money(p.prima_anual)}</td>
+          <td>${fechaCorta(p.fecha_vencimiento)}</td>
+          <td>${tipo === 'vencen'
+              ? `<span class="pill ${d < 0 ? 'pill-err' : d <= 15 ? 'pill-err' : 'pill-warn'} pill-sm">
+                   ${d < 0 ? `vencida hace ${-d} d` : d === 0 ? 'hoy' : `en ${d} d`}</span>`
+              : `<span class="pill ${e.clase} pill-sm">${e.txt}</span>`}</td>
+        </tr>`;
+      }))
+      + `<p class="detalle-total">Prima anual sumada: <b>${money(total)}</b></p>`;
+  } else if (tipo === 'oportunidades') {
+    cuerpo = tabla(['Cliente', 'Tipo', 'Ramo sugerido', 'Por qué', 'Valor est.'],
+      datos.map((o) => {
+        const t = OPORTUNIDAD_ETIQUETA[o.tipo] || { txt: o.tipo, clase: 'pill-off' };
+        return `<tr>
+          <td><b>${esc(o.cliente_nombre)}</b></td>
+          <td><span class="pill ${t.clase} pill-sm">${t.txt}</span></td>
+          <td>${o.ramo_sugerido ? esc((RAMOS[o.ramo_sugerido] || {}).label || o.ramo_sugerido) : '—'}</td>
+          <td class="tabla-motivo">${esc(o.motivo)}</td>
+          <td class="col-num">${o.valor_estimado ? money(o.valor_estimado) : '—'}</td>
+        </tr>`;
+      }));
+  } else {
+    cuerpo = `<ul class="act-lista">${datos.map((a) => {
+      const t = TIPO_ACTIVIDAD[a.tipo] || { txt: a.tipo, icono: 'fa-circle' };
+      const r = RESULTADO_ACTIVIDAD[a.resultado];
+      const d = Math.round((Date.now() - new Date(a.fecha)) / 86400000);
+      return `<li class="act-item">
+        <span class="act-icono"><i class="fa${a.tipo === 'whatsapp' ? 'b' : 's'} ${t.icono}"></i></span>
+        <div class="act-cuerpo">
+          <div class="act-cabeza"><b>${esc(a.cliente_nombre)}</b>
+            <span class="tabla-sub">${t.txt} · ${d <= 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`}</span></div>
+          <p class="act-texto">${esc(a.descripcion)}</p>
+        </div>
+        ${r ? `<span class="pill ${r.clase} pill-sm">${r.txt}</span>` : ''}
+      </li>`;
+    }).join('')}</ul>`;
+  }
+
+  const viejo = $('#modalDetalle');
+  if (viejo) viejo.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="modalDetalle">
+      <div class="modal modal-ancho">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title">${def.titulo}</h3>
+            <p class="modal-sub">${esc(fila.agente_nombre)} · ${datos.length} registro(s)</p>
+          </div>
+          <button class="modal-close" onclick="closeModal('modalDetalle')"><i class="fas fa-times"></i></button>
+        </div>
+        ${cuerpo}
+      </div>
+    </div>`);
+  openModal('modalDetalle');
 }
 
 /* ── Clientes (panel del Agente) ─────────────────────────────────────────── */

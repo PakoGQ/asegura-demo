@@ -8603,3 +8603,23 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
 /* ── Postulaciones ── */
 .post-pills { display: flex; gap: .3rem; flex-wrap: wrap; }
 .post-ramos { margin: .1rem 0 .6rem; display: flex; gap: .3rem; flex-wrap: wrap; }
+
+/* ── Celdas clicables de Equipo ──────────────────────────────────────────────
+   Un número que abre algo tiene que verse distinto de uno que no. Se usa un
+   <button> y no un <span> con onclick para que funcione con teclado y lo
+   anuncie un lector de pantalla. */
+.celda-link {
+  border: 0; background: none; padding: 0; font: inherit; cursor: pointer;
+  color: var(--acento-dk); font-weight: 700;
+  text-decoration: underline; text-decoration-style: dotted;
+  text-underline-offset: 3px; transition: var(--transition);
+}
+.celda-link:hover      { color: var(--acento); text-decoration-style: solid; }
+.celda-link:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: 3px; }
+/* Cuando el número ya viene dentro de una píldora, el subrayado sobra. */
+.celda-link .pill { text-decoration: none; cursor: pointer; }
+.celda-link:has(.pill) { text-decoration: none; }
+
+.modal-sub     { color: var(--t3); font-size: .8rem; margin: .15rem 0 0; }
+.detalle-tabla { max-height: 52vh; overflow-y: auto; }
+.detalle-total { text-align: right; color: var(--t2); font-size: .85rem; margin: .8rem 0 0; }
