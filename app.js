@@ -1267,8 +1267,10 @@ const RESENAS_PENDIENTES = [
    los sustituye por lo que haya en Supabase. Se mantiene el respaldo demo para
    que el panel siga siendo navegable sin base — igual que hace `cargarAgentes()`
    con el directorio público. */
-let CITAS      = CITAS_DEMO;
-let RESENAS_MOD = RESENAS_PENDIENTES;
+let CITAS       = CITAS_DEMO;
+let RESENAS_MOD = RESENAS_PENDIENTES;   // pendientes de moderar
+let RESENAS_OK  = [];                   // ya publicadas
+let POSTULACIONES = [];
 let DATOS_REALES_PANEL = false;
 
 async function cargarDatosDirector(sesion) {
@@ -1282,17 +1284,22 @@ async function cargarDatosDirector(sesion) {
   // trabaja por slug.
   const porId = new Map(AGENTES.map((a) => [a.id, a.slug]));
   try {
-    const [citas, resenas] = await Promise.all([
+    const [citas, resenas, postulaciones] = await Promise.all([
       sbClient.from('citas')
         .select('id, agente_id, cliente_nombre, cliente_whatsapp, modalidad, ramo_interes, fecha, hora, estado, notas')
         .order('fecha', { ascending: false }),
+      // Todas las reseñas de un jalón y se separan en memoria: son pocas y así
+      // la pestaña de publicadas también sale de la base en vez de un arreglo.
       sbClient.from('resenas')
-        .select('id, agente_id, autor, calificacion, texto, created_at')
-        .eq('aprobada', false)
+        .select('id, agente_id, autor, calificacion, texto, aprobada, rechazada, created_at')
+        .order('created_at', { ascending: false }),
+      sbClient.from('postulaciones')
+        .select('id, nombre, whatsapp, ciudad, cedula, experiencia, ramos, mensaje, estado, created_at')
         .order('created_at', { ascending: false }),
     ]);
-    if (citas.error)   throw citas.error;
-    if (resenas.error) throw resenas.error;
+    if (citas.error)        throw citas.error;
+    if (resenas.error)      throw resenas.error;
+    if (postulaciones.error) throw postulaciones.error;
 
     CITAS = (citas.data || []).map((c) => ({
       id: c.id,
@@ -1306,14 +1313,19 @@ async function cargarDatosDirector(sesion) {
       estado: c.estado,
       mensaje: c.notas || '',
     }));
-    RESENAS_MOD = (resenas.data || []).map((r) => ({
+    const todas = (resenas.data || []).map((r) => ({
       id: r.id,
       agente: porId.get(r.agente_id) || '',
       autor: r.autor,
       calificacion: r.calificacion,
       texto: r.texto,
+      aprobada: r.aprobada,
+      rechazada: r.rechazada,
       dias: Math.max(0, Math.round((Date.now() - new Date(r.created_at)) / 86400000)),
     }));
+    RESENAS_MOD  = todas.filter((r) => !r.aprobada && !r.rechazada);
+    RESENAS_OK   = todas.filter((r) => r.aprobada);
+    POSTULACIONES = (postulaciones.data || []).filter((p) => p.estado !== 'rechazado');
     DATOS_REALES_PANEL = true;
   } catch (e) {
     console.warn('No se pudieron leer citas/reseñas de Supabase, usando demo:', e.message);
@@ -1482,15 +1494,17 @@ async function initPanelDirector() {
 
   const pendientes = RESENAS_MOD.length;
   if (pendientes) $('#pdBadgeResenas').textContent = pendientes;
-  $('#pdBadgePost').textContent = '2';
+  // Solo las que nadie ha tocado. Antes era un '2' escrito a mano.
+  $('#pdBadgePost').textContent = POSTULACIONES.filter((p) => p.estado === 'nueva').length || '';
 
   const ir = (sec) => {
     $$('.admin-nav-item[data-sec], .panel-bottom-nav-item[data-sec]')
       .forEach((b) => b.classList.toggle('activo', b.dataset.sec === sec));
     main.innerHTML = (SECCIONES_DIRECTOR[sec] || (() => '<p>Sección en construcción.</p>'))();
     main.scrollTop = 0;
-    if (sec === 'resenas')   activarModeracion();
-    if (sec === 'agentes')   activarGestionAgentes();
+    if (sec === 'resenas')       activarModeracion();
+    if (sec === 'agentes')       activarGestionAgentes();
+    if (sec === 'postulaciones') activarPostulaciones();
     if (sec === 'dashboard') buildGraficasDirector();
     if (sec === 'cartera')   entrarACartera(() => { main.innerHTML = seccionCartera(true); });
     if (sec === 'equipo' && !EQUIPO.cargado) {
@@ -1672,8 +1686,9 @@ const SECCIONES_DIRECTOR = {
   },
 
   resenas() {
-    const aprobadas = Object.entries(RESENAS_DEMO).flatMap(([slug, rs]) =>
-      rs.map((r) => ({ ...r, agente: slug })));
+    // Con base conectada salen de `resenas`; sin base, del respaldo demo.
+    const aprobadas = DATOS_REALES_PANEL ? RESENAS_OK
+      : Object.entries(RESENAS_DEMO).flatMap(([slug, rs]) => rs.map((r) => ({ ...r, agente: slug })));
     return `
       <h1 class="admin-page-title">Reseñas</h1>
       <p class="admin-page-sub">Nada se publica sin que tú lo apruebes</p>
@@ -1715,63 +1730,116 @@ const SECCIONES_DIRECTOR = {
   },
 
   postulaciones() {
-    const post = [
-      { nombre: 'Daniela Ortiz', wa: '+523311112001', ciudad: 'Guadalajara', cedula: 'A1-330012', exp: '4 años', msg: 'Trabajo por mi cuenta y quiero integrarme a un equipo.' },
-      { nombre: 'Fernando Ruiz', wa: '+523311112002', ciudad: 'Zapopan', cedula: null, exp: 'Sin experiencia', msg: 'Voy a presentar el examen de cédula el mes que entra.' },
-    ];
-    return `
+    const ETIQUETA = {
+      nueva:      { txt: 'Nueva',      clase: 'pill-warn' },
+      contactado: { txt: 'Contactado', clase: 'pill-acento' },
+      aceptado:   { txt: 'Aceptado',   clase: 'pill-ok' },
+    };
+    if (!POSTULACIONES.length) return `
       <h1 class="admin-page-title">Postulaciones</h1>
       <p class="admin-page-sub">Agentes que quieren entrar a tu equipo</p>
-      ${post.map((p) => `
-        <article class="admin-card postulacion">
+      <p class="admin-vacio">Ninguna postulación pendiente. Llegan del formulario de
+        <a href="unete.html" target="_blank" rel="noopener">Únete</a>.</p>`;
+
+    return `
+      <h1 class="admin-page-title">Postulaciones</h1>
+      <p class="admin-page-sub">${POSTULACIONES.length} esperando respuesta</p>
+      ${POSTULACIONES.map((p) => {
+        const e = ETIQUETA[p.estado] || { txt: p.estado, clase: 'pill-off' };
+        return `
+        <article class="admin-card postulacion" data-post="${esc(p.id)}">
           <div class="resena-mod-head">
             <div>
               <strong>${esc(p.nombre)}</strong>
-              <span class="table-sub">${esc(p.ciudad)} · ${esc(p.exp)}</span>
+              <span class="table-sub">${esc(p.ciudad || '')}${p.experiencia ? ' · ' + esc(p.experiencia) : ''}</span>
             </div>
-            ${p.cedula ? `<span class="pill pill-ok">Céd. ${esc(p.cedula)}</span>`
-                       : '<span class="pill pill-warn">Sin cédula</span>'}
+            <div class="post-pills">
+              <span class="pill ${e.clase} pill-sm">${e.txt}</span>
+              ${p.cedula ? `<span class="pill pill-ok pill-sm">Céd. ${esc(p.cedula)}</span>`
+                         : '<span class="pill pill-warn pill-sm">Sin cédula</span>'}
+            </div>
           </div>
-          <p>${esc(p.msg)}</p>
+          ${(p.ramos || []).length ? `<p class="post-ramos">${p.ramos.map((r) =>
+            `<span class="pill pill-sm">${esc((RAMOS[r] || {}).label || r)}</span>`).join(' ')}</p>` : ''}
+          <p>${esc(p.mensaje || '')}</p>
           <div class="resena-mod-btns">
-            <a class="btn btn-wa btn-sm" href="${esc(waLink(p.wa, `Hola ${p.nombre}, vi tu postulación.`))}" target="_blank" rel="noopener">
+            <a class="btn btn-wa btn-sm" data-post-accion="contactado"
+               href="${esc(waLink(p.whatsapp, `Hola ${p.nombre}, vi tu postulación a Vaxti.`))}"
+               target="_blank" rel="noopener">
               <i class="fab fa-whatsapp"></i> Contactar
             </a>
-            <button class="btn btn-ghost btn-sm" onclick="showToast('En demo no se cambia el estatus.')">Descartar</button>
+            <button class="btn btn-acento btn-sm" data-post-accion="aceptado">
+              <i class="fas fa-check"></i> Aceptar
+            </button>
+            <button class="btn btn-ghost btn-sm" data-post-accion="rechazado">Descartar</button>
           </div>
-        </article>`).join('')}`;
+        </article>`;
+      }).join('')}
+      <p class="admin-nota"><i class="fas fa-circle-info"></i>
+        Aceptar solo marca la postulación: dar de alta al agente es aparte, en
+        <b>Agentes</b>, porque además hay que crearle su cuenta de acceso.</p>`;
   },
 
   ingresos() {
-    const filas = AGENTES.map((a) => {
-      const citas = a.num_citas || 0;
-      const prima = citas * 1800;
-      return { nombre: a.nombre, citas, prima, comision: prima * 0.12 };
+    // Antes esto era `num_citas * 1800` con 12% fijo: números inventados
+    // presentados como ingresos del equipo. Ahora sale de `polizas`, que es
+    // donde está el dato real, con la comisión que trae cada póliza.
+    if (!CARTERA.cargado) {
+      cargarCartera().then(() => { const m = $('#pdMain'); if (m) m.innerHTML = SECCIONES_DIRECTOR.ingresos(); });
+      return '<p class="admin-vacio"><i class="fas fa-spinner fa-spin"></i> Cargando pólizas…</p>';
+    }
+    if (CARTERA.error) return `
+      <h1 class="admin-page-title">Ingresos</h1>
+      <p class="admin-vacio">${esc(CARTERA.error)}</p>`;
+
+    const vivas = CARTERA.polizas.filter((p) => p.estatus === 'activa' || p.estatus === 'por_vencer');
+    if (!vivas.length) return `
+      <h1 class="admin-page-title">Ingresos</h1>
+      <p class="admin-page-sub">Sale de las pólizas capturadas</p>
+      <p class="admin-vacio">Todavía no hay pólizas. Cárgalas desde
+        <b>Cartera → Importar de Excel</b> y estos números se llenan solos.</p>`;
+
+    const porAgente = new Map();
+    vivas.forEach((p) => {
+      const k = p.agente_nombre || '—';
+      if (!porAgente.has(k)) porAgente.set(k, { nombre: k, polizas: 0, prima: 0, comision: 0 });
+      const f = porAgente.get(k);
+      f.polizas += 1;
+      f.prima   += Number(p.prima_anual || 0);
+      f.comision += Number(p.prima_anual || 0) * Number(p.comision_pct || 0) / 100;
     });
-    const total = filas.reduce((s, f) => s + f.prima, 0);
+    const filas = [...porAgente.values()].sort((a, b) => b.prima - a.prima);
+    const prima = filas.reduce((s, f) => s + f.prima, 0);
+    const comision = filas.reduce((s, f) => s + f.comision, 0);
+    const pctReal = prima ? (comision / prima * 100) : 0;
+
     return `
       <h1 class="admin-page-title">Ingresos</h1>
-      <p class="admin-page-sub">Estimado a partir de las citas atendidas</p>
+      <p class="admin-page-sub">De las ${vivas.length} pólizas vigentes del equipo</p>
       <div class="kpi-grid kpi-grid-4">
-        ${kpi('fa-coins', 'Prima colocada', '$' + (total / 1000).toFixed(0) + 'k', 'histórica')}
-        ${kpi('fa-percent', 'Comisión estimada', '$' + (total * 0.12 / 1000).toFixed(0) + 'k', '12% promedio')}
-        ${kpi('fa-users', 'Agentes produciendo', filas.filter((f) => f.citas > 0).length, `de ${filas.length}`)}
-        ${kpi('fa-chart-line', 'Ticket promedio', '$1,800', 'por póliza')}
+        ${kpi('fa-coins', 'Prima bajo gestión', money(prima), 'anual, pólizas vigentes')}
+        ${kpi('fa-percent', 'Comisión', money(comision), `${pctReal.toFixed(1)}% promedio real`)}
+        ${kpi('fa-users', 'Agentes con cartera', filas.length, `de ${AGENTES.length}`)}
+        ${kpi('fa-chart-line', 'Prima promedio', money(prima / vivas.length), 'por póliza')}
       </div>
       <div class="admin-table-wrap">
         <table class="admin-table">
-          <thead><tr><th>Agente</th><th>Citas</th><th>Prima estimada</th><th>Comisión</th></tr></thead>
+          <thead><tr><th>Agente</th><th class="col-num">Pólizas</th>
+            <th class="col-num">Prima anual</th><th class="col-num">Comisión</th>
+            <th class="col-num">% medio</th></tr></thead>
           <tbody>${filas.map((f) => `
-            <tr><td><strong>${esc(f.nombre)}</strong></td><td class="num">${f.citas}</td>
-            <td class="num">$${f.prima.toLocaleString('es-MX')}</td>
-            <td class="num">$${Math.round(f.comision).toLocaleString('es-MX')}</td></tr>`).join('')}
+            <tr><td><strong>${esc(f.nombre)}</strong></td>
+            <td class="col-num">${f.polizas}</td>
+            <td class="col-num">${money(f.prima)}</td>
+            <td class="col-num">${money(f.comision)}</td>
+            <td class="col-num">${f.prima ? (f.comision / f.prima * 100).toFixed(1) : '0.0'}%</td></tr>`).join('')}
           </tbody>
         </table>
       </div>
-      <p class="admin-nota">
-        Estos números son una estimación de demostración. Los reales salen de la
-        sección <b>Cartera</b>, que lee las pólizas capturadas.
-      </p>`;
+      <p class="admin-nota"><i class="fas fa-circle-info"></i>
+        Es la comisión sobre prima anual de las pólizas vigentes, con el
+        porcentaje que trae cada una. No incluye lo ya cobrado ni las pólizas
+        canceladas o no renovadas.</p>`;
   },
 
   afiliacion() {
@@ -1872,25 +1940,98 @@ function activarModeracion() {
     $$('.tab-panel').forEach((p) => p.classList.toggle('activo', p.id === 'tab-' + b.dataset.tab));
   }));
 
-  $$('[data-mod]').forEach((b) => b.addEventListener('click', () => {
+  $$('[data-mod]').forEach((b) => b.addEventListener('click', async () => {
     const art = b.closest('.resena-mod');
-    art.style.opacity = '.35';
+    const id = art.dataset.resena;
+    const aprobar = b.dataset.mod === 'aprobar';
     art.querySelectorAll('button').forEach((x) => { x.disabled = true; });
-    showToast(b.dataset.mod === 'aprobar'
-      ? 'Publicada. En demo no se guarda.'
-      : 'Rechazada. En demo no se guarda.');
+    art.style.opacity = '.5';
+
+    if (!window.sbClient || !DATOS_REALES_PANEL) {
+      showToast(aprobar ? 'Publicada. En demo no se guarda.' : 'Rechazada. En demo no se guarda.');
+      return;
+    }
+    try {
+      // `rechazada` existe para que lo descartado no vuelva a la cola: el
+      // Director solo tiene `grant update` sobre resenas, no puede borrarlas.
+      const { error } = await sbClient.from('resenas')
+        .update(aprobar ? { aprobada: true } : { rechazada: true })
+        .eq('id', id);
+      if (error) throw error;
+      art.remove();
+      // El trigger `resenas_recalcular` ya actualizó calificación y num_resenas
+      // del agente; hay que releer para que el resto del panel no mienta.
+      await Promise.all([cargarAgentes(), cargarDatosDirector({ demo: false })]);
+      showToast(aprobar ? 'Publicada. Ya se ve en su perfil.' : 'Descartada.');
+      const badge = $('#pdBadgeResenas');
+      if (badge) badge.textContent = RESENAS_MOD.length || '';
+    } catch (e) {
+      art.style.opacity = '1';
+      art.querySelectorAll('button').forEach((x) => { x.disabled = false; });
+      showToast('No se pudo guardar: ' + (e.message || 'error'));
+    }
   }));
 }
 
 function activarGestionAgentes() {
-  $$('[data-accion]').forEach((b) => b.addEventListener('click', () => {
+  $$('[data-accion]').forEach((b) => b.addEventListener('click', async () => {
     const fila = b.closest('tr');
+    const slug = fila.dataset.agente;
+    const ag = AGENTES.find((a) => a.slug === slug);
     const nombre = fila.querySelector('strong').textContent;
     const accion = b.dataset.accion;
-    fila.style.opacity = accion === 'suspender' ? '.4' : '.7';
-    showToast(accion === 'ocultar'
-      ? `${nombre} ya no aparece en el sitio, pero sigue recibiendo citas.`
-      : `${nombre} queda suspendido: fuera del sitio y sin agenda.`);
+
+    if (!window.sbClient || !ag || !ag.id) {
+      fila.style.opacity = accion === 'suspender' ? '.4' : '.7';
+      showToast('En demo no se guarda.');
+      return;
+    }
+
+    // Se alterna: el mismo botón oculta y vuelve a mostrar. Sin esto no habría
+    // forma de deshacer desde la interfaz.
+    const activando = accion === 'ocultar' ? !ag.hidden : !ag.suspended;
+    const parche = accion === 'ocultar'
+      ? { hidden: activando }
+      : { suspended: activando, suspended_from: activando ? new Date().toISOString().slice(0, 10) : null };
+
+    b.disabled = true;
+    try {
+      const { error } = await sbClient.from('agentes').update(parche).eq('id', ag.id);
+      if (error) throw error;
+      await cargarAgentes();
+      const main = $('#pdMain');
+      if (main) { main.innerHTML = SECCIONES_DIRECTOR.agentes(); activarGestionAgentes(); }
+      showToast(accion === 'ocultar'
+        ? (activando ? `${nombre} ya no aparece en el sitio, pero sigue recibiendo citas.`
+                     : `${nombre} vuelve a aparecer en el sitio.`)
+        : (activando ? `${nombre} queda suspendido: fuera del sitio y sin agenda.`
+                     : `${nombre} vuelve a estar activo.`));
+    } catch (e) {
+      b.disabled = false;
+      showToast('No se pudo guardar: ' + (e.message || 'error'));
+    }
+  }));
+}
+
+function activarPostulaciones() {
+  $$('[data-post-accion]').forEach((b) => b.addEventListener('click', async () => {
+    const art = b.closest('.postulacion');
+    const id = art.dataset.post;
+    const estado = b.dataset.postAccion;
+    if (!window.sbClient || !DATOS_REALES_PANEL) { showToast('En demo no se guarda.'); return; }
+    try {
+      const { error } = await sbClient.from('postulaciones').update({ estado }).eq('id', id);
+      if (error) throw error;
+      await cargarDatosDirector({ demo: false });
+      const main = $('#pdMain');
+      if (main) { main.innerHTML = SECCIONES_DIRECTOR.postulaciones(); activarPostulaciones(); }
+      const badge = $('#pdBadgePost');
+      if (badge) badge.textContent = POSTULACIONES.filter((p) => p.estado === 'nueva').length || '';
+      showToast(estado === 'aceptado' ? 'Marcada como aceptada.'
+              : estado === 'rechazado' ? 'Descartada.' : 'Marcada como contactada.');
+    } catch (e) {
+      showToast('No se pudo guardar: ' + (e.message || 'error'));
+    }
   }));
 }
 

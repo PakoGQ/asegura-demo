@@ -72,10 +72,22 @@ create table if not exists public.resenas (
 alter table public.resenas
   alter column autor set default 'Anónimo';
 
+-- La moderación necesita tres estados, no dos. Con solo `aprobada` una reseña
+-- rechazada se queda en false y vuelve a aparecer en la cola para siempre, y el
+-- Director no puede borrarla: solo tiene `grant update` sobre esta tabla, a
+-- propósito, para que no pueda desaparecer la opinión de un cliente.
+-- La cola de pendientes es `not aprobada and not rechazada`.
+alter table public.resenas
+  add column if not exists rechazada boolean not null default false;
+
+-- El índice de pendientes tiene que mirar las dos columnas o sigue arrastrando
+-- las rechazadas.
+drop index if exists resenas_pendientes_idx;
+
 create index if not exists resenas_agente_idx on public.resenas (agente_id)
   where aprobada;
 create index if not exists resenas_pendientes_idx on public.resenas (created_at desc)
-  where not aprobada;
+  where not aprobada and not rechazada;
 
 -- ---------------------------------------------------------------------------
 -- resenas_clientes — privadas, del agente hacia el cliente.

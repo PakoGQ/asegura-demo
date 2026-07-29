@@ -8599,3 +8599,7 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
 .act-cuerpo  { flex: 1; min-width: 0; }
 .act-cabeza  { display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
 .act-texto   { margin: .2rem 0 0; color: var(--t2); font-size: .85rem; line-height: 1.5; }
+
+/* ── Postulaciones ── */
+.post-pills { display: flex; gap: .3rem; flex-wrap: wrap; }
+.post-ramos { margin: .1rem 0 .6rem; display: flex; gap: .3rem; flex-wrap: wrap; }
