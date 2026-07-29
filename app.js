@@ -4062,6 +4062,22 @@ async function confirmarPasswordActual(actual) {
   if (error) throw new Error('La contraseña actual no es correcta.');
 }
 
+/* Campo de contraseña con el botón de ojo. Usa el mismo `.pass-wrap` y el
+   mismo `togglePassword()` que el modal de acceso, para que se comporte igual
+   en todo el sitio en vez de tener dos implementaciones que se separan. */
+function campoPassword(id, etiqueta, autocomplete, nota) {
+  return `
+    <div class="form-group">
+      <label class="form-label" for="${id}">${etiqueta}</label>
+      <div class="pass-wrap">
+        <input class="form-input" id="${id}" type="password" autocomplete="${autocomplete}" />
+        <button type="button" class="pass-toggle" aria-label="Mostrar contraseña"
+                onclick="togglePassword(this)"><i class="fas fa-eye"></i></button>
+      </div>
+      ${nota ? `<p class="modal-texto imp-nota">${nota}</p>` : ''}
+    </div>`;
+}
+
 function modalCuenta(id, titulo, cuerpo, textoBoton) {
   const viejo = $('#' + id);
   if (viejo) viejo.remove();
@@ -4085,21 +4101,11 @@ function modalCuenta(id, titulo, cuerpo, textoBoton) {
 
 function abrirCambioPassword() {
   modalCuenta('modalPass', 'Cambiar contraseña', `
-    <div class="form-group">
-      <label class="form-label" for="passActual">Contraseña actual</label>
-      <input class="form-input" id="passActual" type="password" autocomplete="current-password" />
-    </div>
-    <div class="form-group">
-      <label class="form-label" for="passNueva">Contraseña nueva</label>
-      <input class="form-input" id="passNueva" type="password" autocomplete="new-password" />
-      <p class="modal-texto imp-nota">Mínimo 8 caracteres. Guárdala en tu gestor
-        de contraseñas: si la pierdes, la recuperación va por correo y depende
-        de que el correo de acceso sea una bandeja real.</p>
-    </div>
-    <div class="form-group">
-      <label class="form-label" for="passRepite">Repite la nueva</label>
-      <input class="form-input" id="passRepite" type="password" autocomplete="new-password" />
-    </div>`, 'Cambiar contraseña');
+    ${campoPassword('passActual', 'Contraseña actual', 'current-password')}
+    ${campoPassword('passNueva', 'Contraseña nueva', 'new-password',
+      'Mínimo 8 caracteres. Guárdala en tu gestor de contraseñas: si la pierdes, ' +
+      'la recuperación va por correo y depende de que el correo de acceso sea una bandeja real.')}
+    ${campoPassword('passRepite', 'Repite la nueva', 'new-password')}`, 'Cambiar contraseña');
 
   $('#modalPassOk').addEventListener('click', async () => {
     const aviso = $('#modalPassAviso');
@@ -4140,10 +4146,7 @@ function abrirCambioCorreo() {
       <label class="form-label" for="mailNuevo">Correo nuevo</label>
       <input class="form-input" id="mailNuevo" type="email" autocomplete="email" />
     </div>
-    <div class="form-group">
-      <label class="form-label" for="mailPass">Tu contraseña actual</label>
-      <input class="form-input" id="mailPass" type="password" autocomplete="current-password" />
-    </div>
+    ${campoPassword('mailPass', 'Tu contraseña actual', 'current-password')}
     <p class="modal-texto imp-nota">
       <b>Ojo:</b> Supabase manda un enlace de confirmación al correo nuevo y el
       cambio <b>no surte efecto</b> hasta que lo abras. Si pones una dirección
