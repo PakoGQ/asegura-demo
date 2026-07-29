@@ -8504,3 +8504,67 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
 /* La columna se declara explícita porque en móvil .nav-center va con
    display:none y sale de la rejilla: sin esto, el botón de acceso se corría
    al centro en vez de quedarse a la derecha. */
+
+/* ═══════════════════════════════════════════════════════════
+   CARTERA E IMPORTADOR
+   Antes vivían en cartera/assets/css con sus propios tokens y la fuente del
+   sistema. Aquí reusan los mismos componentes que el resto del panel
+   (.admin-card, .admin-table, .kpi-grid, .tabs-bar) para que entrar a Cartera
+   se sienta igual que entrar a Ingresos.
+   ═══════════════════════════════════════════════════════════ */
+
+.tabla-sub    { color: var(--t3); font-size: .74rem; font-weight: 500; }
+.col-num      { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tabla-motivo { color: var(--t2); font-size: .8rem; max-width: 30ch; }
+
+/* ── Importador ── */
+.modal-ancho   { max-width: 780px; width: min(780px, calc(100vw - 2rem)); }
+.modal-texto   { color: var(--t2); font-size: .87rem; line-height: 1.6; margin: 0 0 1rem; }
+.modal-acciones{ display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1.25rem; }
+
+.imp-soltar {
+  display: flex; flex-direction: column; align-items: center; gap: .5rem;
+  padding: 2rem 1rem; border: 2px dashed var(--border); border-radius: var(--r-md);
+  background: var(--surface); cursor: pointer; transition: var(--transition);
+  color: var(--t2); font-size: .9rem; font-weight: 600;
+}
+.imp-soltar:hover { border-color: var(--acento); color: var(--acento-dk); background: #fff7f4; }
+.imp-soltar i { font-size: 1.8rem; color: var(--acento); }
+
+.imp-ayuda { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: .8rem; }
+.imp-ayuda summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--t2); }
+.imp-ayuda summary:hover { color: var(--t1); }
+.imp-lista { margin: .8rem 0; padding-left: 1.1rem; color: var(--t2); font-size: .84rem; line-height: 1.9; }
+.imp-lista.imp-errores { max-height: 220px; overflow-y: auto; }
+
+/* Rejilla de mapeo: dos columnas en escritorio, una en móvil. */
+.imp-mapeo { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem 1rem; margin: 1rem 0; }
+.imp-campo { display: flex; flex-direction: column; gap: .25rem; }
+.imp-campo label { font-size: .8rem; color: var(--t2); }
+.imp-campo select {
+  padding: .45rem .6rem; border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--card); color: var(--t1); font: inherit; font-size: .85rem;
+}
+.imp-nota { font-size: .76rem; margin: .15rem 0 0; }
+
+.imp-resumen { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; margin-bottom: 1.2rem; }
+.imp-resumen > div {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: .8rem .6rem; text-align: center;
+}
+.imp-resumen b    { display: block; font-size: 1.25rem; color: var(--t1); font-family: var(--font-serif); }
+.imp-resumen span { display: block; font-size: .72rem; color: var(--t3); margin-top: .15rem; }
+.imp-resumen .imp-malas b { color: var(--err, #e05252); }
+
+.imp-previa { max-height: 240px; overflow-y: auto; }
+
+.imp-error, .imp-ok {
+  font-size: .85rem; padding: .7rem .9rem; border-radius: var(--r-sm); margin: 1rem 0 0;
+}
+.imp-error { background: #fdeeee; color: #a03030; border: 1px solid #f3c9c9; }
+.imp-ok    { background: #eaf7f0; color: #1f6f47; border: 1px solid #bfe6d1; }
+
+@media (max-width: 640px) {
+  .imp-mapeo   { grid-template-columns: 1fr; }
+  .imp-resumen { grid-template-columns: 1fr 1fr; }
+}

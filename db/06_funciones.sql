@@ -317,6 +317,32 @@ as $$
   select public.generar_oportunidades(public.mi_usuario_id());
 $$;
 
+-- Variante para el equipo. `generar_mis_oportunidades()` genera para QUIEN
+-- LLAMA, así que no sirve cuando el Director importa la cartera de uno de sus
+-- agentes: las oportunidades se generarían a nombre del Director, que no tiene
+-- pólizas, y el agente nunca las vería.
+--
+-- Aquí el permiso lo decide `es_de_mi_equipo()`, el mismo helper que usa el
+-- RLS: pasa si el objetivo soy yo, o si soy director y es de mi equipo. Lo
+-- comprueba la base y no el cliente, porque un `select` desde el navegador se
+-- puede modificar y esta función es `security definer`.
+create or replace function public.generar_oportunidades_de(p_agente uuid)
+returns int
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+begin
+  if not public.es_de_mi_equipo(p_agente) then
+    raise exception 'No puedes generar oportunidades de un agente que no es de tu equipo.';
+  end if;
+  return public.generar_oportunidades(p_agente);
+end;
+$$;
+
+grant execute on function public.generar_oportunidades_de(uuid) to authenticated;
+
 revoke execute on function public.generar_oportunidades(uuid) from anon, authenticated;
 grant  execute on function public.generar_mis_oportunidades()  to authenticated;
 grant  execute on function public.actualizar_estatus_polizas() to authenticated;

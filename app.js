@@ -1492,6 +1492,7 @@ async function initPanelDirector() {
     if (sec === 'resenas')   activarModeracion();
     if (sec === 'agentes')   activarGestionAgentes();
     if (sec === 'dashboard') buildGraficasDirector();
+    if (sec === 'cartera')   entrarACartera(() => { main.innerHTML = seccionCartera(true); });
   };
 
   $$('[data-sec]').forEach((b) => {
@@ -1793,6 +1794,9 @@ const SECCIONES_DIRECTOR = {
       </div>`;
   },
 
+  // El Director ve la cartera de todo su equipo — con la columna de agente.
+  cartera() { return seccionCartera(true); },
+
   config() {
     return `
       <h1 class="admin-page-title">Configuración</h1>
@@ -1940,6 +1944,7 @@ async function initPanelAgente() {
     if (sec === 'agenda') activarSemana();
     if (sec === 'citas') activarTabsCitas();
     if (sec === 'contenido') activarTabsCitas();
+    if (sec === 'cartera') entrarACartera(() => { main.innerHTML = seccionCartera(false); });
   };
 
   $$('[data-sec]').forEach((b) => {
@@ -2172,6 +2177,10 @@ const SECCIONES_AGENTE = {
         <i class="fas fa-floppy-disk"></i> Guardar cambios
       </button>`;
   },
+
+  // El agente ve solo lo suyo: el RLS ya filtra las dos vistas, así que la
+  // misma plantilla sirve sin la columna de agente, que aquí sobra.
+  cartera() { return seccionCartera(false); },
 
   config() {
     return `
@@ -2464,4 +2473,631 @@ function initPostular() {
       restaurar();
     }
   });
+}
+
+/* ===========================================================================
+   19. Cartera — el CRM de pólizas, como sección de los dos paneles
+
+   Antes vivía en `cartera/`, una mini-app aparte con su propio CSS, sus
+   propios módulos y su propio login. Se veía y se sentía como otra
+   aplicación: fuente del sistema en vez de Poppins, sin Font Awesome, y un
+   salto de página al entrar. Aquí se renderiza como una sección más, con los
+   mismos componentes que Ingresos o Afiliación.
+
+   Las dos vistas hacen el filtrado por RLS, no por parámetro: el agente ve lo
+   suyo y el Director lo de su equipo, sin que el cliente tenga que pedirlo.
+   =========================================================================== */
+
+const CARTERA = { polizas: [], oportunidades: [], cargado: false, error: '' };
+
+const OPORTUNIDAD_ETIQUETA = {
+  cross_sell:           { txt: 'Venta cruzada',      clase: 'pill-ok'   },
+  riesgo_no_renovacion: { txt: 'Riesgo de fuga',     clase: 'pill-err'  },
+  revision_cobertura:   { txt: 'Revisar cobertura',  clase: 'pill-warn' },
+};
+
+const ESTATUS_POLIZA = {
+  activa:      { txt: 'Activa',      clase: 'pill-ok'   },
+  por_vencer:  { txt: 'Por vencer',  clase: 'pill-warn' },
+  renovada:    { txt: 'Renovada',    clase: 'pill-ok'   },
+  cancelada:   { txt: 'Cancelada',   clase: 'pill-off'  },
+  no_renovada: { txt: 'No renovada', clase: 'pill-err'  },
+};
+
+const money = (n) => '$' + Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 });
+const diasPara = (fecha) =>
+  Math.round((new Date(fecha + 'T00:00:00') - new Date().setHours(0, 0, 0, 0)) / 86400000);
+
+async function cargarCartera() {
+  if (!window.sbClient) { CARTERA.error = 'Sin conexión a la base.'; CARTERA.cargado = true; return; }
+  try {
+    const [pol, opo] = await Promise.all([
+      sbClient.from('v_polizas_detalle').select('*').order('fecha_vencimiento'),
+      sbClient.from('v_oportunidades_detalle').select('*').eq('estatus', 'abierta'),
+    ]);
+    if (pol.error) throw pol.error;
+    if (opo.error) throw opo.error;
+    CARTERA.polizas = pol.data || [];
+    CARTERA.oportunidades = opo.data || [];
+    CARTERA.error = '';
+  } catch (e) {
+    CARTERA.error = e.message || 'No se pudo leer la cartera.';
+    console.warn('Cartera:', e);
+  }
+  CARTERA.cargado = true;
+}
+
+/* Una sola plantilla para los dos paneles. `conAgente` agrega la columna de
+   quién es cada póliza: al Director le importa, al agente le sobra. */
+function seccionCartera(conAgente) {
+  if (!CARTERA.cargado) return '<p class="admin-vacio"><i class="fas fa-spinner fa-spin"></i> Cargando cartera…</p>';
+  if (CARTERA.error) return `<p class="admin-vacio">${esc(CARTERA.error)}</p>`;
+
+  const pol = CARTERA.polizas;
+  const vivas = pol.filter((p) => p.estatus === 'activa' || p.estatus === 'por_vencer');
+  const prima = vivas.reduce((s, p) => s + Number(p.prima_anual || 0), 0);
+  const comision = vivas.reduce((s, p) => s + Number(p.prima_anual || 0) * Number(p.comision_pct || 0) / 100, 0);
+  const porVencer = vivas.filter((p) => { const d = diasPara(p.fecha_vencimiento); return d >= 0 && d <= 60; });
+  const clientes = new Set(pol.map((p) => p.cliente_id)).size;
+
+  const filaPoliza = (p) => {
+    const e = ESTATUS_POLIZA[p.estatus] || { txt: p.estatus, clase: 'pill-off' };
+    return `<tr>
+      <td><b>${esc(p.cliente_nombre)}</b>${conAgente ? `<br><span class="tabla-sub">${esc(p.agente_nombre || '')}</span>` : ''}</td>
+      <td>${esc((RAMOS[p.ramo] || {}).label || p.ramo)}</td>
+      <td class="col-num">${esc(p.numero_poliza)}</td>
+      <td class="col-num">${money(p.prima_anual)}</td>
+      <td>${fechaCorta(p.fecha_vencimiento)}</td>
+      <td><span class="pill ${e.clase} pill-sm">${e.txt}</span></td>
+    </tr>`;
+  };
+
+  const filaVence = (p) => {
+    const d = diasPara(p.fecha_vencimiento);
+    return `<tr>
+      <td><b>${esc(p.cliente_nombre)}</b>${conAgente ? `<br><span class="tabla-sub">${esc(p.agente_nombre || '')}</span>` : ''}</td>
+      <td>${esc((RAMOS[p.ramo] || {}).label || p.ramo)}</td>
+      <td class="col-num">${money(p.prima_anual)}</td>
+      <td>${fechaCorta(p.fecha_vencimiento)}</td>
+      <td><span class="pill ${d <= 15 ? 'pill-err' : d <= 30 ? 'pill-warn' : 'pill-off'} pill-sm">
+            ${d < 0 ? 'vencida' : d === 0 ? 'hoy' : `en ${d} d`}</span></td>
+      ${p.cliente_telefono ? `<td><a class="btn btn-ghost btn-sm" target="_blank" rel="noopener"
+          href="https://wa.me/${esc(String(p.cliente_telefono).replace(/\D/g, ''))}">
+          <i class="fab fa-whatsapp"></i></a></td>` : '<td></td>'}
+    </tr>`;
+  };
+
+  const filaOportunidad = (o) => {
+    const t = OPORTUNIDAD_ETIQUETA[o.tipo] || { txt: o.tipo, clase: 'pill-off' };
+    return `<tr>
+      <td><b>${esc(o.cliente_nombre)}</b>${conAgente ? `<br><span class="tabla-sub">${esc(o.agente_nombre || '')}</span>` : ''}</td>
+      <td><span class="pill ${t.clase} pill-sm">${t.txt}</span></td>
+      <td>${o.ramo_sugerido ? esc((RAMOS[o.ramo_sugerido] || {}).label || o.ramo_sugerido) : '—'}</td>
+      <td class="tabla-motivo">${esc(o.motivo)}</td>
+      <td class="col-num">${o.valor_estimado ? money(o.valor_estimado) : '—'}</td>
+    </tr>`;
+  };
+
+  const tabla = (cabeceras, filas, vacio) => filas.length
+    ? `<div class="admin-table-wrap"><table class="admin-table">
+         <thead><tr>${cabeceras.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
+         <tbody>${filas.join('')}</tbody></table></div>`
+    : `<p class="admin-vacio">${vacio}</p>`;
+
+  const colCliente = conAgente ? 'Cliente / Agente' : 'Cliente';
+
+  return `
+    <h1 class="admin-page-title">Cartera</h1>
+    <p class="admin-page-sub">Las pólizas que ya vendiste, y a quién conviene hablarle</p>
+
+    <div class="admin-acciones-top">
+      <button class="btn btn-acento btn-sm" onclick="abrirImportador()">
+        <i class="fas fa-file-arrow-up"></i> Importar de Excel
+      </button>
+    </div>
+
+    <div class="kpi-grid">
+      ${kpi('fa-file-contract', 'Pólizas vigentes', vivas.length, `${pol.length} en total`)}
+      ${kpi('fa-users', 'Clientes', clientes, 'con al menos una póliza')}
+      ${kpi('fa-coins', 'Prima anual', money(prima), 'de las vigentes')}
+      ${kpi('fa-hand-holding-dollar', 'Comisión estimada', money(comision), 'sobre la prima vigente')}
+      ${kpi('fa-clock', 'Vencen en 60 días', porVencer.length, 'requieren contacto', porVencer.length ? 'alerta' : '')}
+      ${kpi('fa-lightbulb', 'Oportunidades', CARTERA.oportunidades.length, 'detectadas por el sistema')}
+    </div>
+
+    <div class="tabs-bar">
+      <button class="tab-btn activo" data-tab="polizas">Pólizas (${pol.length})</button>
+      <button class="tab-btn" data-tab="vencen">Por vencer (${porVencer.length})</button>
+      <button class="tab-btn" data-tab="oport">Oportunidades (${CARTERA.oportunidades.length})</button>
+    </div>
+
+    <section class="admin-card" data-panel="polizas">
+      ${tabla([colCliente, 'Ramo', 'Póliza', 'Prima', 'Vence', 'Estatus'],
+              pol.map(filaPoliza),
+              'No hay pólizas todavía. Usa «Importar de Excel» para subir la cartera que ya tienes.')}
+    </section>
+
+    <section class="admin-card oculto" data-panel="vencen">
+      ${tabla([colCliente, 'Ramo', 'Prima', 'Vence', 'Faltan', ''],
+              porVencer.map(filaVence),
+              'Nada vence en los próximos 60 días.')}
+    </section>
+
+    <section class="admin-card oculto" data-panel="oport">
+      ${tabla([colCliente, 'Tipo', 'Ramo sugerido', 'Por qué', 'Valor est.'],
+              CARTERA.oportunidades.map(filaOportunidad),
+              'Sin oportunidades abiertas. Se generan solas a partir de las pólizas.')}
+      <p class="admin-nota"><i class="fas fa-circle-info"></i>
+        Las detecta un motor de reglas en la base: venta cruzada a vida o gastos
+        médicos, pólizas que vencen sin contacto reciente, y clientes con una
+        sola póliza desde hace tiempo.</p>
+    </section>`;
+}
+
+/* Mismo patrón que la moderación de reseñas, scoped a `.tabs-bar` para no
+   enganchar botones de otra sección que siga en el DOM. */
+function activarTabsCartera() {
+  const btns = $$('.tabs-bar .tab-btn[data-tab]');
+  btns.forEach((b) => b.addEventListener('click', () => {
+    btns.forEach((x) => x.classList.toggle('activo', x === b));
+    $$('[data-panel]').forEach((p) => p.classList.toggle('oculto', p.dataset.panel !== b.dataset.tab));
+  }));
+}
+
+/* ===========================================================================
+   20. Importador de cartera desde CSV
+
+   El equipo tiene su cartera en Excel. Sin esto el CRM arranca vacío y nadie
+   captura cientos de pólizas a mano — está anotado como el mayor riesgo de
+   adopción del proyecto.
+
+   Se lee CSV y no .xlsx a propósito: leer Excel de verdad obliga a meter
+   SheetJS (~400KB), la primera dependencia nueva del proyecto después de
+   Chart.js, para ahorrarle al usuario un «Guardar como» que hace una vez.
+   =========================================================================== */
+
+/* Parser de CSV de verdad, no un `split(',')`: los nombres traen comas
+   («Pérez, S.A. de C.V.»), las notas traen comillas y saltos de línea, y
+   Excel escapa las comillas duplicándolas. */
+function parsearCSV(texto) {
+  const filas = [];
+  let campo = '', fila = [], enComillas = false;
+  texto = texto.replace(/^﻿/, '').replace(/\r\n?/g, '\n');  // BOM de Excel + CRLF
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (enComillas) {
+      if (c === '"') {
+        if (texto[i + 1] === '"') { campo += '"'; i++; } else enComillas = false;
+      } else campo += c;
+    } else if (c === '"') enComillas = true;
+    else if (c === ',' || c === ';') { fila.push(campo); campo = ''; }
+    else if (c === '\n') { fila.push(campo); filas.push(fila); fila = []; campo = ''; }
+    else campo += c;
+  }
+  if (campo !== '' || fila.length) { fila.push(campo); filas.push(fila); }
+  return filas.filter((f) => f.some((c) => c.trim() !== ''));
+}
+
+const COLUMNAS_IMPORT = [
+  { clave: 'cliente',      etiqueta: 'Cliente',        obligatoria: true  },
+  { clave: 'telefono',     etiqueta: 'Teléfono',       obligatoria: false },
+  { clave: 'email',        etiqueta: 'Correo',         obligatoria: false },
+  { clave: 'rfc',          etiqueta: 'RFC',            obligatoria: false },
+  { clave: 'ramo',         etiqueta: 'Ramo',           obligatoria: true  },
+  { clave: 'numero',       etiqueta: 'Número póliza',  obligatoria: true  },
+  { clave: 'prima',        etiqueta: 'Prima anual',    obligatoria: true  },
+  { clave: 'comision',     etiqueta: 'Comisión %',     obligatoria: false },
+  { clave: 'inicio',       etiqueta: 'Fecha inicio',   obligatoria: true  },
+  { clave: 'vencimiento',  etiqueta: 'Fecha vence',    obligatoria: true  },
+  { clave: 'aseguradora',  etiqueta: 'Aseguradora',    obligatoria: false },
+  { clave: 'forma_pago',   etiqueta: 'Forma de pago',  obligatoria: false },
+];
+
+/* Sinónimos para adivinar el mapeo. Nadie titula sus columnas igual, y
+   obligar a renombrar el Excel antes de subirlo mata la adopción. */
+const SINONIMOS = {
+  cliente:     ['cliente', 'nombre', 'asegurado', 'contratante', 'titular'],
+  telefono:    ['telefono', 'teléfono', 'celular', 'whatsapp', 'tel', 'movil', 'móvil'],
+  email:       ['email', 'correo', 'e-mail', 'mail'],
+  rfc:         ['rfc'],
+  ramo:        ['ramo', 'producto', 'tipo', 'linea', 'línea'],
+  numero:      ['numero', 'número', 'poliza', 'póliza', 'no. poliza', 'num poliza', 'numero de poliza', 'no poliza'],
+  prima:       ['prima', 'prima anual', 'importe', 'monto', 'valor'],
+  comision:    ['comision', 'comisión', 'comision %', '% comision', 'porcentaje'],
+  inicio:      ['inicio', 'fecha inicio', 'vigencia desde', 'desde', 'emision', 'emisión', 'fecha de inicio'],
+  vencimiento: ['vencimiento', 'fecha vencimiento', 'vence', 'vigencia hasta', 'hasta', 'fin', 'fecha fin'],
+  aseguradora: ['aseguradora', 'compania', 'compañia', 'compañía', 'empresa'],
+  forma_pago:  ['forma de pago', 'forma pago', 'periodicidad', 'pago', 'frecuencia'],
+};
+
+const normaliza = (s) => String(s || '').toLowerCase().trim()
+  // U+0300–U+036F son los diacríticos que NFD separa de su letra. Van como
+  // escapes y no como caracteres literales: literales son invisibles en un
+  // editor y cualquier guardado en otra codificación los rompe sin que se note.
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+function adivinarMapeo(cabeceras) {
+  const mapa = {};
+  COLUMNAS_IMPORT.forEach(({ clave }) => {
+    const opciones = (SINONIMOS[clave] || []).map(normaliza);
+    const i = cabeceras.findIndex((h) => opciones.includes(normaliza(h)));
+    // Segundo intento, más laxo: que la cabecera contenga el sinónimo.
+    const j = i >= 0 ? i : cabeceras.findIndex((h) => opciones.some((o) => normaliza(h).includes(o)));
+    if (j >= 0) mapa[clave] = j;
+  });
+  return mapa;
+}
+
+/* Fechas: Excel en español escupe dd/mm/aaaa, y `new Date()` lo lee como
+   mes/día. Se convierte a mano; una fecha mal leída no falla, solo guarda el
+   año equivocado, que es peor. */
+function aFechaISO(v) {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+  if (m) {
+    let [, d, mes, a] = m;
+    if (a.length === 2) a = (Number(a) > 50 ? '19' : '20') + a;
+    return `${a}-${mes.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  return null;
+}
+
+const aNumero = (v) => {
+  const s = String(v || '').replace(/[^0-9.-]/g, '');
+  // Sin un solo dígito no es un número. Sin esta guarda, «noesnumero» pierde
+  // todas sus letras, queda en '' y `Number('')` es 0: la basura entraba como
+  // prima cero sin que nada avisara, que es peor que rechazarla.
+  if (!/\d/.test(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+};
+
+const RAMO_SINONIMOS = {
+  auto: ['auto', 'automovil', 'automóvil', 'autos', 'vehiculo', 'vehículo', 'coche', 'flotilla'],
+  vida: ['vida', 'vida individual', 'temporal', 'dotal'],
+  gastos_medicos: ['gastos medicos', 'gastos médicos', 'gmm', 'salud', 'gastos medicos mayores', 'medico', 'médico'],
+  hogar: ['hogar', 'casa', 'casa habitacion', 'casa habitación', 'daños', 'danos'],
+  empresarial: ['empresarial', 'empresa', 'negocio', 'pyme', 'responsabilidad civil', 'rc'],
+  educativo: ['educativo', 'educacion', 'educación', 'universitario', 'ahorro', 'escolar'],
+  fianzas: ['fianzas', 'fianza', 'cumplimiento'],
+};
+
+function aRamo(v) {
+  const n = normaliza(v);
+  if (!n) return null;
+  for (const [ramo, ops] of Object.entries(RAMO_SINONIMOS)) {
+    if (ops.some((o) => n === o || n.includes(o))) return ramo;
+  }
+  return null;
+}
+
+const FORMAS_PAGO = ['anual', 'semestral', 'trimestral', 'mensual'];
+function aFormaPago(v) {
+  const n = normaliza(v);
+  return FORMAS_PAGO.find((f) => n.includes(f)) || null;
+}
+
+/* Valida una fila y devuelve { ok, datos, errores }. Se valida TODO antes de
+   escribir nada: importar la mitad y fallar a media tabla deja al usuario sin
+   saber qué entró y qué no. */
+function validarFila(celdas, mapa, nFila) {
+  const v = (clave) => (mapa[clave] === undefined ? '' : (celdas[mapa[clave]] || '').trim());
+  const errores = [];
+
+  const nombre = v('cliente');
+  if (!nombre) errores.push('falta el cliente');
+
+  const ramo = aRamo(v('ramo'));
+  if (!ramo) errores.push(`ramo no reconocido: «${v('ramo') || 'vacío'}»`);
+
+  const numero = v('numero');
+  if (!numero) errores.push('falta el número de póliza');
+
+  const prima = aNumero(v('prima'));
+  if (prima === null || prima < 0) errores.push(`prima inválida: «${v('prima') || 'vacío'}»`);
+
+  const inicio = aFechaISO(v('inicio'));
+  if (!inicio) errores.push(`fecha de inicio inválida: «${v('inicio') || 'vacío'}»`);
+
+  const vencimiento = aFechaISO(v('vencimiento'));
+  if (!vencimiento) errores.push(`fecha de vencimiento inválida: «${v('vencimiento') || 'vacío'}»`);
+
+  // El CHECK `polizas_vigencia_ck` rechaza esto en la base; mejor decirlo aquí.
+  if (inicio && vencimiento && vencimiento < inicio) errores.push('vence antes de empezar');
+
+  const comision = aNumero(v('comision'));
+
+  return {
+    fila: nFila,
+    ok: errores.length === 0,
+    errores,
+    datos: {
+      cliente: { nombre, telefono: v('telefono') || null, email: v('email') || null, rfc: v('rfc') || null },
+      poliza: {
+        aseguradora: v('aseguradora') || (window.CONFIG && CONFIG.ASEGURADORA) || 'GNP',
+        ramo, numero_poliza: numero,
+        prima_anual: prima,
+        comision_pct: (comision !== null && comision >= 0 && comision <= 100) ? comision : null,
+        fecha_inicio: inicio, fecha_vencimiento: vencimiento,
+        forma_pago: aFormaPago(v('forma_pago')),
+      },
+    },
+  };
+}
+
+/* ── Interfaz del importador ────────────────────────────────────────────────
+   Tres pasos en un modal: pegar/elegir archivo → revisar el mapeo y la vista
+   previa → importar. El paso del medio existe porque nadie titula sus columnas
+   igual, y porque conviene enseñar qué se va a guardar antes de guardarlo.  */
+const IMPORT = { filas: [], cabeceras: [], mapa: {}, validadas: [], agenteId: null };
+
+function abrirImportador() {
+  if (!$('#modalImportar')) {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal-overlay" id="modalImportar">
+        <div class="modal modal-ancho">
+          <div class="modal-header">
+            <h3 class="modal-title">Importar cartera</h3>
+            <button class="modal-close" onclick="closeModal('modalImportar')"><i class="fas fa-times"></i></button>
+          </div>
+          <div id="impCuerpo"></div>
+        </div>
+      </div>`);
+  }
+  IMPORT.filas = []; IMPORT.validadas = [];
+  pintarImportPaso1();
+  openModal('modalImportar');
+}
+
+function pintarImportPaso1() {
+  $('#impCuerpo').innerHTML = `
+    <p class="modal-texto">
+      Exporta tu Excel con <b>Archivo → Guardar como → CSV UTF-8</b> y súbelo aquí.
+      Una fila por póliza; si un cliente tiene varias, se repite su nombre.
+    </p>
+
+    <label class="imp-soltar" for="impArchivo">
+      <i class="fas fa-file-csv"></i>
+      <span>Elige tu archivo .csv</span>
+      <input type="file" id="impArchivo" accept=".csv,text/csv" class="oculto">
+    </label>
+
+    <details class="imp-ayuda">
+      <summary>¿Qué columnas necesita?</summary>
+      <p class="modal-texto">Se reconocen solas por el título, con sus variantes
+        habituales. Obligatorias en <b>negrita</b>:</p>
+      <ul class="imp-lista">
+        ${COLUMNAS_IMPORT.map((c) => `<li>${c.obligatoria ? `<b>${c.etiqueta}</b>` : c.etiqueta}</li>`).join('')}
+      </ul>
+      <p class="modal-texto">Las fechas pueden ir como <code>dd/mm/aaaa</code> o
+        <code>aaaa-mm-dd</code>. El ramo se reconoce por nombre común
+        («GMM», «Automóvil», «Daños»…).</p>
+    </details>
+
+    <div id="impAviso"></div>`;
+
+  $('#impArchivo').addEventListener('change', (ev) => {
+    const f = ev.target.files[0];
+    if (!f) return;
+    const lector = new FileReader();
+    lector.onload = () => procesarCSV(String(lector.result));
+    lector.onerror = () => { $('#impAviso').innerHTML =
+      '<p class="imp-error">No se pudo leer el archivo.</p>'; };
+    // UTF-8 explícito: Excel en Windows guarda en Latin-1 y sin esto los
+    // acentos entran rotos, el mismo problema que costó una sesión entera.
+    lector.readAsText(f, 'UTF-8');
+  });
+}
+
+function procesarCSV(texto) {
+  const filas = parsearCSV(texto);
+  if (filas.length < 2) {
+    $('#impAviso').innerHTML = '<p class="imp-error">El archivo no tiene filas de datos.</p>';
+    return;
+  }
+  IMPORT.cabeceras = filas[0];
+  IMPORT.filas = filas.slice(1);
+  IMPORT.mapa = adivinarMapeo(IMPORT.cabeceras);
+  pintarImportPaso2();
+}
+
+function pintarImportPaso2() {
+  const faltantes = COLUMNAS_IMPORT.filter((c) => c.obligatoria && IMPORT.mapa[c.clave] === undefined);
+  const opciones = (sel) => `<option value="">— sin asignar —</option>` +
+    IMPORT.cabeceras.map((h, i) =>
+      `<option value="${i}" ${sel === i ? 'selected' : ''}>${esc(h || `columna ${i + 1}`)}</option>`).join('');
+
+  // El Director elige a quién se le carga; el agente solo puede a sí mismo.
+  const soyDirector = !!$('#pdMain');
+  const selectorAgente = soyDirector ? `
+    <div class="imp-campo">
+      <label for="impAgente"><b>¿De quién es esta cartera?</b></label>
+      <select id="impAgente">
+        ${AGENTES.filter((a) => a.usuario_id).map((a) =>
+          `<option value="${esc(a.usuario_id)}">${esc(a.nombre)}</option>`).join('')}
+      </select>
+      <p class="modal-texto imp-nota">Todas las pólizas del archivo se le asignan a esta persona.</p>
+    </div>` : '';
+
+  $('#impCuerpo').innerHTML = `
+    <p class="modal-texto">
+      <b>${IMPORT.filas.length}</b> filas leídas. Revisa que cada dato apunte a
+      la columna correcta y corrige lo que haga falta.
+    </p>
+    ${selectorAgente}
+    ${faltantes.length ? `<p class="imp-error">
+      Falta asignar: ${faltantes.map((c) => c.etiqueta).join(', ')}.</p>` : ''}
+
+    <div class="imp-mapeo">
+      ${COLUMNAS_IMPORT.map((c) => `
+        <div class="imp-campo">
+          <label for="map_${c.clave}">${c.obligatoria ? `<b>${c.etiqueta}</b>` : c.etiqueta}</label>
+          <select id="map_${c.clave}" data-clave="${c.clave}">${opciones(IMPORT.mapa[c.clave])}</select>
+        </div>`).join('')}
+    </div>
+
+    <div class="modal-acciones">
+      <button class="btn btn-ghost btn-sm" onclick="pintarImportPaso1()">Atrás</button>
+      <button class="btn btn-acento btn-sm" id="impRevisar">Revisar los datos</button>
+    </div>`;
+
+  $$('#impCuerpo select[data-clave]').forEach((s) => s.addEventListener('change', () => {
+    const v = s.value;
+    if (v === '') delete IMPORT.mapa[s.dataset.clave];
+    else IMPORT.mapa[s.dataset.clave] = Number(v);
+  }));
+
+  $('#impRevisar').addEventListener('click', () => {
+    const falta = COLUMNAS_IMPORT.filter((c) => c.obligatoria && IMPORT.mapa[c.clave] === undefined);
+    if (falta.length) { pintarImportPaso2(); return; }
+    IMPORT.agenteId = soyDirector ? $('#impAgente').value : (YO_AGENTE && YO_AGENTE.usuario_id);
+    IMPORT.validadas = IMPORT.filas.map((f, i) => validarFila(f, IMPORT.mapa, i + 2));
+    pintarImportPaso3();
+  });
+}
+
+function pintarImportPaso3() {
+  const buenas = IMPORT.validadas.filter((v) => v.ok);
+  const malas  = IMPORT.validadas.filter((v) => !v.ok);
+  const prima  = buenas.reduce((s, v) => s + v.datos.poliza.prima_anual, 0);
+  const clientes = new Set(buenas.map((v) => normaliza(v.datos.cliente.nombre))).size;
+
+  $('#impCuerpo').innerHTML = `
+    <div class="imp-resumen">
+      <div><b>${buenas.length}</b><span>pólizas listas</span></div>
+      <div><b>${clientes}</b><span>clientes</span></div>
+      <div><b>${money(prima)}</b><span>prima anual</span></div>
+      <div class="${malas.length ? 'imp-malas' : ''}"><b>${malas.length}</b><span>con problemas</span></div>
+    </div>
+
+    ${malas.length ? `
+      <details class="imp-ayuda" open>
+        <summary>${malas.length} fila(s) que se van a omitir</summary>
+        <ul class="imp-lista imp-errores">
+          ${malas.slice(0, 30).map((m) => `<li><b>Fila ${m.fila}:</b> ${esc(m.errores.join('; '))}</li>`).join('')}
+          ${malas.length > 30 ? `<li>…y ${malas.length - 30} más</li>` : ''}
+        </ul>
+        <p class="modal-texto">Corrígelas en tu Excel y vuelve a subirlo; las
+          que ya entraron no se duplican, porque el número de póliza es único
+          por aseguradora.</p>
+      </details>` : ''}
+
+    ${buenas.length ? `
+      <p class="modal-texto">Primeras filas, como quedarían guardadas:</p>
+      <div class="admin-table-wrap imp-previa">
+        <table class="admin-table">
+          <thead><tr><th>Cliente</th><th>Ramo</th><th>Póliza</th><th>Prima</th><th>Vence</th></tr></thead>
+          <tbody>${buenas.slice(0, 5).map((v) => `<tr>
+            <td>${esc(v.datos.cliente.nombre)}</td>
+            <td>${esc((RAMOS[v.datos.poliza.ramo] || {}).label || v.datos.poliza.ramo)}</td>
+            <td class="col-num">${esc(v.datos.poliza.numero_poliza)}</td>
+            <td class="col-num">${money(v.datos.poliza.prima_anual)}</td>
+            <td>${fechaCorta(v.datos.poliza.fecha_vencimiento)}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>` : '<p class="imp-error">No hay ninguna fila válida para importar.</p>'}
+
+    <div class="modal-acciones">
+      <button class="btn btn-ghost btn-sm" onclick="pintarImportPaso2()">Atrás</button>
+      <button class="btn btn-acento btn-sm" id="impGuardar" ${buenas.length ? '' : 'disabled'}>
+        <i class="fas fa-cloud-arrow-up"></i> Importar ${buenas.length} póliza(s)
+      </button>
+    </div>
+    <div id="impProgreso"></div>`;
+
+  const btn = $('#impGuardar');
+  if (btn) btn.addEventListener('click', () => guardarImportacion(buenas));
+}
+
+async function guardarImportacion(buenas) {
+  const btn = $('#impGuardar');
+  const prog = $('#impProgreso');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando…';
+
+  if (!window.sbClient) { prog.innerHTML = '<p class="imp-error">Sin conexión a la base.</p>'; return; }
+  if (!IMPORT.agenteId) {
+    prog.innerHTML = '<p class="imp-error">No se pudo determinar de quién es la cartera.</p>';
+    btn.disabled = false; return;
+  }
+
+  try {
+    // Un cliente puede traer varias pólizas: se agrupa por nombre para no
+    // crear cuatro «Juan Pérez» distintos con una póliza cada uno.
+    const porCliente = new Map();
+    buenas.forEach((v) => {
+      const k = normaliza(v.datos.cliente.nombre);
+      if (!porCliente.has(k)) porCliente.set(k, { cliente: v.datos.cliente, polizas: [] });
+      porCliente.get(k).polizas.push(v.datos.poliza);
+    });
+
+    // Reusar los clientes que ya existen con ese nombre, en vez de duplicarlos.
+    const { data: yaHay, error: eLee } = await sbClient
+      .from('clientes').select('id, nombre').eq('agente_id', IMPORT.agenteId);
+    if (eLee) throw eLee;
+    const existentes = new Map((yaHay || []).map((c) => [normaliza(c.nombre), c.id]));
+
+    const nuevos = [...porCliente.entries()].filter(([k]) => !existentes.has(k));
+    if (nuevos.length) {
+      const { data, error } = await sbClient.from('clientes')
+        .insert(nuevos.map(([, g]) => ({ ...g.cliente, agente_id: IMPORT.agenteId })))
+        .select('id, nombre');
+      if (error) throw error;
+      (data || []).forEach((c) => existentes.set(normaliza(c.nombre), c.id));
+    }
+
+    const polizas = [];
+    porCliente.forEach((g, k) => g.polizas.forEach((p) =>
+      polizas.push({ ...p, cliente_id: existentes.get(k), agente_id: IMPORT.agenteId })));
+
+    // `upsert` sobre (aseguradora, numero_poliza), que es único: reimportar el
+    // mismo archivo actualiza en vez de reventar con un error de duplicado.
+    const { error: ePol } = await sbClient.from('polizas')
+      .upsert(polizas, { onConflict: 'aseguradora,numero_poliza' });
+    if (ePol) throw ePol;
+
+    // Con pólizas nuevas el motor de reglas tiene material que analizar.
+    // Se pasa el agente explícitamente: `generar_mis_oportunidades()` genera
+    // para quien llama, y cuando el Director importa la cartera de alguien de
+    // su equipo, quien llama no es el dueño de esas pólizas.
+    let oportunidades = 0;
+    try {
+      const { data, error } = await sbClient.rpc('generar_oportunidades_de', { p_agente: IMPORT.agenteId });
+      if (error) throw error;
+      oportunidades = Number(data) || 0;
+    } catch (e) { console.warn('No se generaron oportunidades:', e.message); }
+
+    prog.innerHTML = `<p class="imp-ok">
+      <i class="fas fa-circle-check"></i>
+      Listo: ${polizas.length} póliza(s) de ${porCliente.size} cliente(s).
+      ${oportunidades ? `Se detectaron ${oportunidades} oportunidad(es).` : ''}
+    </p>`;
+    btn.innerHTML = 'Importado';
+
+    await cargarCartera();
+    setTimeout(() => { closeModal('modalImportar'); recargarSeccionCartera(); }, 1600);
+  } catch (e) {
+    console.error(e);
+    prog.innerHTML = `<p class="imp-error">No se pudo importar: ${esc(e.message || 'error desconocido')}</p>`;
+    btn.disabled = false;
+    btn.innerHTML = 'Reintentar';
+  }
+}
+
+/* Repinta la sección de cartera del panel en el que estemos. */
+function recargarSeccionCartera() {
+  const pd = $('#pdMain'), pa = $('#paMain');
+  if (pd && $('.tab-btn[data-tab="polizas"]')) { pd.innerHTML = seccionCartera(true);  activarTabsCartera(); }
+  else if (pa && $('.tab-btn[data-tab="polizas"]')) { pa.innerHTML = seccionCartera(false); activarTabsCartera(); }
+}
+
+/* Entrar a Cartera: la primera vez se lee de la base, y mientras tanto la
+   sección ya está pintada con su estado de carga. Después se sirve de memoria,
+   para que cambiar de sección y volver sea instantáneo como en Ingresos. */
+function entrarACartera(repintar) {
+  if (CARTERA.cargado) { activarTabsCartera(); return; }
+  cargarCartera().then(() => { repintar(); activarTabsCartera(); });
 }
