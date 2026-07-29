@@ -1503,7 +1503,7 @@ async function initPanelDirector() {
     main.innerHTML = (SECCIONES_DIRECTOR[sec] || (() => '<p>Sección en construcción.</p>'))();
     main.scrollTop = 0;
     if (sec === 'resenas')       activarModeracion();
-    if (sec === 'agentes')       activarGestionAgentes();
+    if (sec === 'agentes') repintarAgentes();
     if (sec === 'postulaciones') activarPostulaciones();
     if (sec === 'dashboard') buildGraficasDirector();
     if (sec === 'cartera')   entrarACartera(() => { main.innerHTML = seccionCartera(true); });
@@ -1615,22 +1615,29 @@ const SECCIONES_DIRECTOR = {
   },
 
   agentes() {
+    const lista = ordenarAgentesPanel(AGENTES.slice(), ORDEN_AGENTES);
+    const def = ORDENES_PANEL.find((o) => o.clave === ORDEN_AGENTES) || ORDENES_PANEL[0];
     return `
       <h1 class="admin-page-title">Agentes</h1>
-      <p class="admin-page-sub">${AGENTES.length} en tu equipo</p>
-      <div class="admin-acciones-top">
-        <button class="btn btn-acento btn-sm" onclick="showToast('En demo no se dan de alta agentes.')">
+      <p class="admin-page-sub">${AGENTES.length} en tu equipo · ${def.pie}</p>
+      <div class="admin-acciones-top ag-barra">
+        <label class="ag-orden-label" for="agOrden">Ordenar por</label>
+        <select class="form-input ag-orden" id="agOrden">
+          ${ORDENES_PANEL.map((o) => `<option value="${o.clave}"
+             ${o.clave === ORDEN_AGENTES ? 'selected' : ''}>${o.txt}</option>`).join('')}
+        </select>
+        <button class="btn btn-acento btn-sm" onclick="showToast('El alta de agentes necesita crear también su cuenta de acceso. Todavía no está.')">
           <i class="fas fa-plus"></i> Agregar agente
         </button>
       </div>
       <div class="admin-table-wrap">
         <table class="admin-table">
           <thead><tr>
-            <th>Agente</th><th>Zona</th><th>Ramos</th><th>Citas</th>
-            <th>Calificación</th><th>Estado</th><th></th>
+            <th>Agente</th><th>Zona</th><th>Ramos</th><th class="col-num">Citas</th>
+            <th class="col-num">Cartera</th><th>Calificación</th><th>Estado</th><th></th>
           </tr></thead>
           <tbody>
-            ${AGENTES.map((a) => `
+            ${lista.map((a) => `
               <tr data-agente="${esc(a.slug)}">
                 <td>
                   <div class="table-name">
@@ -1643,8 +1650,19 @@ const SECCIONES_DIRECTOR = {
                 </td>
                 <td>${esc(a.zona || '')}</td>
                 <td>${(a.ramos || []).slice(0, 2).map((r) => `<span class="pill pill-sm">${esc((RAMOS[r] || {}).label)}</span>`).join(' ')}</td>
-                <td class="num">${a.num_citas || 0}</td>
-                <td>${estrellas(a.calificacion)} ${Number(a.calificacion).toFixed(1)}</td>
+                <td class="col-num">${a.num_citas || 0}</td>
+                <td class="col-num">${(() => {
+                  const c = carteraDe(a);
+                  return c.polizas
+                    ? `${c.polizas}<br><span class="tabla-sub">${money(c.prima)}</span>`
+                    : '<span class="tabla-sub">sin pólizas</span>';
+                })()}</td>
+                <td>
+                  ${Number(a.num_resenas)
+                    ? `${estrellas(a.calificacion)} ${Number(a.calificacion).toFixed(1)}
+                       <span class="tabla-sub">${a.num_resenas} reseña${a.num_resenas === 1 ? '' : 's'}</span>`
+                    : '<span class="tabla-sub">sin reseñas todavía</span>'}
+                </td>
                 <td>
                   ${a.disponible ? '<span class="pill pill-ok">Disponible</span>' : '<span class="pill pill-off">Ocupado</span>'}
                   ${a.verificado ? '' : '<span class="pill pill-warn">Sin verificar</span>'}
@@ -1658,6 +1676,7 @@ const SECCIONES_DIRECTOR = {
           </tbody>
         </table>
       </div>
+      <p class="admin-nota"><i class="fas fa-circle-info"></i> ${def.nota}</p>
       <p class="admin-nota">
         <b>Ocultar</b> saca al agente del sitio público pero sigue operando y recibiendo citas.
         <b>Suspender</b> lo saca de todo y registra desde cuándo, para saber qué cobrarle de afiliación.
@@ -2000,8 +2019,9 @@ function activarGestionAgentes() {
       const { error } = await sbClient.from('agentes').update(parche).eq('id', ag.id);
       if (error) throw error;
       await cargarAgentes();
-      const main = $('#pdMain');
-      if (main) { main.innerHTML = SECCIONES_DIRECTOR.agentes(); activarGestionAgentes(); }
+      // Repinta por el mismo camino que la navegación, para no perder el
+      // selector de orden ni el orden que el Director tenía elegido.
+      repintarAgentes();
       showToast(accion === 'ocultar'
         ? (activando ? `${nombre} ya no aparece en el sitio, pero sigue recibiendo citas.`
                      : `${nombre} vuelve a aparecer en el sitio.`)
@@ -3842,4 +3862,117 @@ async function guardarActividad() {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-plus"></i> Registrar';
   }
+}
+
+/* ===========================================================================
+   22. Ordenar la lista de agentes (panel del Director)
+
+   Sirve para premiar a quien va bien y ver a quién hay que acompañar. Y es
+   la base de lo que viene después: decidir el orden en que salen en el sitio
+   público. El esquema ya tiene `es_destacado` y `top10` para eso.
+   =========================================================================== */
+
+let ORDEN_AGENTES = 'prima';
+
+const ORDENES_PANEL = [
+  { clave: 'prima',        txt: 'Más prima colocada',
+    pie:  'ordenados por prima bajo gestión',
+    nota: 'Prima anual de las pólizas vigentes que tiene cada uno. Es la medida de venta más honesta que hay en la base; las citas solo dicen quién tuvo la conversación, no quién cerró.' },
+  { clave: 'prima_asc',    txt: 'Menos prima colocada',
+    pie:  'los de menor cartera primero',
+    nota: 'Los de abajo son los que necesitan acompañamiento. Ojo con los recién llegados: aparecen aquí sin que signifique mal desempeño.' },
+  { clave: 'polizas',      txt: 'Más pólizas',
+    pie:  'ordenados por número de pólizas',
+    nota: 'Cuenta operaciones, no dinero. Alguien con muchas pólizas chicas sale arriba de quien colocó una empresarial grande.' },
+  { clave: 'rating',       txt: 'Mejor calificados',
+    pie:  'ordenados por calificación ponderada',
+    nota: 'No es el promedio a secas: quien tiene una sola reseña de 5★ no está por encima de quien tiene 40 promediando 4.8. Las calificaciones con pocas opiniones se acercan al promedio del equipo hasta que juntan historial. Los que no tienen ninguna reseña van al final: todavía no hay nada que juzgar.' },
+  { clave: 'rating_asc',   txt: 'Peor calificados',
+    pie:  'los peor calificados primero',
+    nota: 'Mismo cálculo ponderado, al revés, y solo entre quienes SÍ tienen reseñas. Un agente sin reseñas no es un agente malo: es uno nuevo, y ocuparía el lugar del que de verdad tiene un problema.' },
+  { clave: 'citas',        txt: 'Más citas atendidas',
+    pie:  'ordenados por citas',
+    nota: 'Mide actividad, no resultado: son las conversaciones que tuvo, hayan cerrado o no.' },
+  { clave: 'abandono',     txt: 'Cartera sin seguimiento',
+    pie:  'los que no han contactado a nadie primero',
+    nota: 'Agentes con pólizas a su nombre y ningún contacto registrado en 30 días. Es donde se pierde una renovación sin que nadie se entere.' },
+  { clave: 'nombre',       txt: 'Nombre (A-Z)',
+    pie:  'en orden alfabético',
+    nota: 'Sin criterio de desempeño, para cuando solo buscas a alguien.' },
+];
+
+/* Lo que cada agente tiene en cartera. Se cruza por `usuario_id`, que la vista
+   pública no expone, así que se pasa por `v_resumen_agente` (cargado en
+   Equipo) y, si no está, se cae a los agregados de la propia vista. */
+function carteraDe(a) {
+  const fila = EQUIPO.filas.find((f) => f.agente_id === a.id);
+  if (fila) return {
+    polizas: Number(fila.polizas_vigentes || 0),
+    prima: Number(fila.prima_bajo_gestion || 0),
+    actividad: Number(fila.actividad_30d || 0),
+  };
+  return { polizas: 0, prima: 0, actividad: 0 };
+}
+
+/* Cuántas reseñas hacen falta para que la calificación propia pese más que el
+   promedio del equipo. Con 5, alguien con 5 opiniones va mitad y mitad. */
+const RESENAS_PARA_CONFIAR = 5;
+
+function notaPonderada(a) {
+  const conNota = AGENTES.filter((x) => Number(x.num_resenas || 0) > 0);
+  const promedioEquipo = conNota.length
+    ? conNota.reduce((s, x) => s + Number(x.calificacion || 0), 0) / conNota.length : 0;
+  const v = Number(a.num_resenas || 0);
+  const R = Number(a.calificacion || 0);
+  if (!v) return 0;
+  return (v / (v + RESENAS_PARA_CONFIAR)) * R
+       + (RESENAS_PARA_CONFIAR / (v + RESENAS_PARA_CONFIAR)) * promedioEquipo;
+}
+
+function ordenarAgentesPanel(lista, clave) {
+  const c = (a) => carteraDe(a);
+  const conResenas = (a) => Number(a.num_resenas || 0) > 0;
+
+  const criterios = {
+    prima:     (a, b) => c(b).prima - c(a).prima,
+    prima_asc: (a, b) => c(a).prima - c(b).prima,
+    polizas:   (a, b) => c(b).polizas - c(a).polizas,
+    citas:     (a, b) => (b.num_citas || 0) - (a.num_citas || 0),
+    nombre:    (a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'),
+
+    // Promedio ponderado, no el crudo. Con el crudo, alguien con UNA reseña de
+    // 5★ le gana a quien tiene 40 promediando 4.8, que es justo lo contrario de
+    // lo que el Director necesita ver. Se mezcla la calificación de cada uno
+    // con el promedio del equipo, dándole peso según cuántas reseñas tenga:
+    // pocas opiniones tiran al promedio general, muchas mandan por sí solas.
+    // Es el mismo cálculo con el que IMDb evita que dos votos encabecen la
+    // lista. Los que no tienen ninguna reseña van al final en los dos sentidos:
+    // no son ni los mejores ni los peores, todavía no tienen historial.
+    rating:     (a, b) => (conResenas(b) - conResenas(a)) || (notaPonderada(b) - notaPonderada(a)),
+    rating_asc: (a, b) => (conResenas(b) - conResenas(a)) || (notaPonderada(a) - notaPonderada(b)),
+
+    // Primero quien tiene cartera y cero contactos; entre ellos, el de más
+    // prima en riesgo. Quien no tiene pólizas no puede estar abandonándolas.
+    abandono: (a, b) => {
+      const ca = c(a), cb = c(b);
+      const riesgo = (x) => (x.polizas > 0 && x.actividad === 0) ? 1 : 0;
+      return riesgo(cb) - riesgo(ca) || cb.prima - ca.prima;
+    },
+  };
+  return lista.sort(criterios[clave] || criterios.prima);
+}
+
+/* Un solo punto de repintado y de enganche, como en Clientes. La cartera de
+   cada agente sale de `v_resumen_agente`; si todavía no está cargada, la lista
+   se pinta igual —con ceros en la columna Cartera— y se repinta al llegar, en
+   vez de dejar la sección en blanco esperando. */
+function repintarAgentes() {
+  const main = $('#pdMain');
+  if (!main) return;
+  main.innerHTML = SECCIONES_DIRECTOR.agentes();
+  activarGestionAgentes();
+  const sel = $('#agOrden');
+  if (sel) sel.addEventListener('change', () => { ORDEN_AGENTES = sel.value; repintarAgentes(); });
+
+  if (!EQUIPO.cargado && window.sbClient) cargarEquipo().then(repintarAgentes);
 }
