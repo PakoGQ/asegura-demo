@@ -317,6 +317,51 @@ as $$
   select public.generar_oportunidades(public.mi_usuario_id());
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Historial de suspensiones
+--
+-- `agentes.susp_history` existía desde el principio y nadie lo escribía: la
+-- columna estaba ahí, siempre vacía. Sirve para saber cuántos días estuvo
+-- publicado cada agente, que es la base para cobrarle la afiliación — un dato
+-- que nadie puede reconstruir a mano después.
+--
+-- El trigger se llama `agentes_suspension` a propósito: los BEFORE triggers de
+-- Postgres corren en orden alfabético, y este tiene que ir DESPUÉS de
+-- `agentes_campos_protegidos`. Si corriera antes, la protección revertiría lo
+-- que este anotó cuando quien intenta suspender no tiene permiso.
+-- ---------------------------------------------------------------------------
+create or replace function public.registrar_suspension()
+returns trigger
+language plpgsql
+as $$
+declare
+  n int;
+begin
+  if new.suspended and not old.suspended then
+    -- Empieza. Se abre un rango con solo la fecha de inicio.
+    new.suspended_from := coalesce(new.suspended_from, current_date);
+    new.susp_history := coalesce(old.susp_history, '[]'::jsonb)
+      || jsonb_build_object('desde', new.suspended_from::text);
+
+  elsif old.suspended and not new.suspended then
+    -- Termina. Se cierra el último rango que quedó abierto; si no hay ninguno
+    -- —porque la suspensión venía de antes de este trigger— no se inventa.
+    n := jsonb_array_length(coalesce(old.susp_history, '[]'::jsonb));
+    if n > 0 and (old.susp_history -> (n - 1) ->> 'hasta') is null then
+      new.susp_history := jsonb_set(old.susp_history,
+        array[(n - 1)::text, 'hasta'], to_jsonb(current_date::text));
+    end if;
+    new.suspended_from := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists agentes_suspension on public.agentes;
+create trigger agentes_suspension
+  before update on public.agentes
+  for each row execute function public.registrar_suspension();
+
 -- Variante para el equipo. `generar_mis_oportunidades()` genera para QUIEN
 -- LLAMA, así que no sirve cuando el Director importa la cartera de uno de sus
 -- agentes: las oportunidades se generarían a nombre del Director, que no tiene

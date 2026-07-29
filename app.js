@@ -436,7 +436,7 @@ async function doLogin() {
   if (err) err.style.display = 'none';
 
   if (!window.sbClient) {
-    fallar('La base todavía no está conectada. Falta pegar la URL y la anon key en supabase-config.js.');
+    fallar('El sistema todavía no está conectado a su base de datos. Avisa a quien lo administra.');
     return;
   }
   if (!email || !pass) { fallar('Escribe tu correo y tu contraseña.'); return; }
@@ -1512,7 +1512,8 @@ async function initPanelDirector() {
     main.scrollTop = 0;
     if (sec === 'resenas')       activarModeracion();
     if (sec === 'agentes') repintarAgentes();
-    if (sec === 'config')  activarConfig();
+    if (sec === 'config')     activarConfig();
+    if (sec === 'afiliacion') activarAfiliacion();
     if (sec === 'postulaciones') activarPostulaciones();
     if (sec === 'dashboard') buildGraficasDirector();
     if (sec === 'cartera')   entrarACartera(() => { main.innerHTML = seccionCartera(true); });
@@ -1533,7 +1534,7 @@ async function initPanelDirector() {
     $('.admin-layout').insertAdjacentHTML('beforebegin', `
       <div class="demo-cinta">
         <i class="fas fa-flask"></i> Modo demo — datos ficticios. Nada de lo que
-        toques aquí se guarda. Se apaga solo al conectar Supabase.
+        toques aquí se guarda. Desaparece sola al conectar la base de datos.
       </div>`);
   }
 
@@ -1635,7 +1636,7 @@ const SECCIONES_DIRECTOR = {
           ${ORDENES_PANEL.map((o) => `<option value="${o.clave}"
              ${o.clave === ORDEN_AGENTES ? 'selected' : ''}>${o.txt}</option>`).join('')}
         </select>
-        <button class="btn btn-acento btn-sm" onclick="showToast('El alta de agentes necesita crear también su cuenta de acceso. Todavía no está.')">
+        <button class="btn btn-acento btn-sm" onclick="abrirAltaAgente()">
           <i class="fas fa-plus"></i> Agregar agente
         </button>
       </div>
@@ -1872,26 +1873,87 @@ const SECCIONES_DIRECTOR = {
   },
 
   afiliacion() {
+    if (!AFILIACION.cargado) {
+      cargarAfiliacion().then(() => {
+        const m = $('#pdMain');
+        if (m) { m.innerHTML = SECCIONES_DIRECTOR.afiliacion(); activarAfiliacion(); }
+      });
+      return '<p class="admin-vacio"><i class="fas fa-spinner fa-spin"></i> Cargando…</p>';
+    }
+    if (AFILIACION.error) return `
+      <h1 class="admin-page-title">Afiliación</h1>
+      <p class="admin-vacio">${esc(AFILIACION.error)}</p>`;
+
+    const hoy = new Date();
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const diasDelMes = Math.round((hoy - inicioMes) / 86400000) + 1;
+
+    const filas = AFILIACION.filas.map((a) => {
+      const alta = a.created_at ? new Date(a.created_at) : null;
+      const desdeMes = alta && alta > inicioMes ? alta : inicioMes;
+      const susp = diasSuspendidoEnMes(a, inicioMes, hoy);
+      const facturables = Math.max(0,
+        Math.round((hoy - desdeMes) / 86400000) + 1 - susp);
+      return { ...a, alta, susp, facturables };
+    });
+
+    // Oculto sigue contando como publicado para el cobro: el agente sigue
+    // operando y recibiendo citas, solo no aparece en el directorio. Lo único
+    // que descuenta días es suspender.
+    const publicados = filas.filter((f) => !f.suspended && f.activo).length;
+    const suspendidos = filas.filter((f) => f.suspended).length;
+    const totalFacturable = filas.reduce((s, f) => s + f.facturables, 0);
+
     return `
       <h1 class="admin-page-title">Afiliación</h1>
-      <p class="admin-page-sub">Qué paga cada agente por estar publicado</p>
-      <div class="admin-card">
-        <p class="admin-vacio" style="text-align:left">
-          Durante la beta todos los agentes del equipo están <b>sin cuota</b>,
-          a cambio de que usen el sistema de verdad y den retroalimentación.
-          El esquema de cobro se define contigo antes de salir de beta.
-        </p>
+      <p class="admin-page-sub">Cuántos días estuvo publicado cada agente este mes</p>
+
+      <div class="kpi-grid kpi-grid-4">
+        ${kpi('fa-users', 'Publicados hoy', publicados, `de ${filas.length} en el equipo`)}
+        ${kpi('fa-ban', 'Suspendidos', suspendidos, 'fuera del sitio',
+              suspendidos ? 'alerta' : '')}
+        ${kpi('fa-calendar-day', 'Días facturables', totalFacturable, `del ${1} al ${diasDelMes} de este mes`)}
+        ${kpi('fa-hourglass-half', 'Días no facturables', filas.reduce((s, f) => s + f.susp, 0), 'por suspensión')}
       </div>
+
       <div class="admin-table-wrap">
         <table class="admin-table">
-          <thead><tr><th>Agente</th><th>Plan</th><th>Desde</th><th>Estado</th></tr></thead>
-          <tbody>${AGENTES.map((a) => `
-            <tr><td><strong>${esc(a.nombre)}</strong></td>
-            <td><span class="pill pill-acento">Beta sin costo</span></td>
-            <td>—</td><td><span class="pill pill-ok">Al corriente</span></td></tr>`).join('')}
+          <thead><tr>
+            <th>Agente</th><th>Plan</th><th>En el equipo desde</th>
+            <th class="col-num">Días publicado</th><th class="col-num">Días suspendido</th>
+            <th>Estado</th>
+          </tr></thead>
+          <tbody>
+            ${filas.map((f) => `
+              <tr data-afil="${esc(f.id)}">
+                <td><strong>${esc(f.nombre)}</strong></td>
+                <td>
+                  <select class="form-input afil-plan" data-agente-id="${esc(f.id)}">
+                    ${PLANES.map((p) => `<option value="${p.clave}"
+                      ${p.clave === (f.plan || 'beta') ? 'selected' : ''}>${p.txt}</option>`).join('')}
+                  </select>
+                </td>
+                <td>${f.alta ? fechaCorta(f.alta.toISOString().slice(0, 10)) +
+                      ' ' + f.alta.getFullYear() : '—'}</td>
+                <td class="col-num">${f.facturables}</td>
+                <td class="col-num">${f.susp
+                    ? `<span class="pill pill-warn pill-sm">${f.susp}</span>` : '0'}</td>
+                <td><span class="pill ${f.suspended || !f.activo ? 'pill-off'
+                      : f.hidden ? 'pill-warn' : 'pill-ok'} pill-sm">
+                      ${f.suspended ? 'Suspendido' : !f.activo ? 'Inactivo'
+                        : f.hidden ? 'Oculto' : 'Publicado'}</span></td>
+              </tr>`).join('')}
           </tbody>
         </table>
-      </div>`;
+      </div>
+      <div id="afilAviso"></div>
+
+      <p class="admin-nota"><i class="fas fa-circle-info"></i>
+        Se cuentan días, no dinero: <b>el precio de la afiliación todavía no
+        está definido</b>. Lo que sí queda registrado es cuántos días estuvo
+        publicado cada quien, que es sobre lo que se cobrará cuando haya
+        precio. Suspender a alguien descuenta esos días automáticamente;
+        ocultarlo no, porque sigue recibiendo citas.</p>`;
   },
 
   // El Director ve la cartera de todo su equipo — con la columna de agente.
@@ -1906,8 +1968,8 @@ const SECCIONES_DIRECTOR = {
 
       <section class="admin-card">
         <h2>Tu acceso</h2>
-        <p class="modal-texto">Con esto entras al panel. Es lo único que
-          Supabase valida al iniciar sesión.</p>
+        <p class="modal-texto">Con esto entras al panel. Es lo único que se
+          valida al iniciar sesión.</p>
         <div class="cfg-dato">
           <div>
             <span class="form-label">Correo de acceso</span>
@@ -1954,9 +2016,9 @@ const SECCIONES_DIRECTOR = {
 
       <section class="admin-card">
         <h2>El sitio</h2>
-        <p class="modal-texto">Estos valores viven en <code>supabase-config.js</code>,
-          un archivo del repositorio, no en la base. Se cambian editando ese
-          archivo y volviendo a publicar; por eso aquí solo se muestran.</p>
+        <p class="modal-texto">Estos datos son parte de la configuración del sitio,
+          no de tu cuenta: cambiarlos requiere publicar una nueva versión. Si
+          necesitas ajustar alguno, pídelo a quien administra el sistema.</p>
         <div class="admin-table-wrap">
           <table class="admin-table">
             <tbody>
@@ -2432,7 +2494,7 @@ const SECCIONES_AGENTE = {
         <div class="check-grid">${modos}</div>
       </section>
 
-      <button class="btn btn-acento btn-lg" onclick="showToast('En demo no se guarda. Con Supabase conectado, esto escribe en la tabla agentes.')">
+      <button class="btn btn-acento btn-lg" onclick="showToast('En modo demostración no se guarda.')">
         <i class="fas fa-floppy-disk"></i> Guardar cambios
       </button>`;
   },
@@ -4148,7 +4210,7 @@ function abrirCambioCorreo() {
     </div>
     ${campoPassword('mailPass', 'Tu contraseña actual', 'current-password')}
     <p class="modal-texto imp-nota">
-      <b>Ojo:</b> Supabase manda un enlace de confirmación al correo nuevo y el
+      <b>Ojo:</b> se manda un enlace de confirmación al correo nuevo y el
       cambio <b>no surte efecto</b> hasta que lo abras. Si pones una dirección
       que no existe, el enlace no llega y te quedas con la de siempre — no te
       quedas fuera, pero tampoco cambia nada.
@@ -4215,4 +4277,265 @@ function activarConfig() {
       btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Guardar';
     }
   });
+}
+
+/* ===========================================================================
+   24. Afiliación — sobre qué se cobra
+
+   No hay tabla de pagos y el precio todavía no está definido (ver §18 de
+   CLAUDE.md), así que esta sección NO inventa importes. Cuenta lo único que
+   nadie puede reconstruir después: cuántos días estuvo publicado cada agente.
+   Ese número sale de `susp_history`, que el trigger `agentes_suspension`
+   ahora sí llena.
+   =========================================================================== */
+
+const AFILIACION = { filas: [], cargado: false, error: '' };
+
+/* Sin importes a propósito. Ponerle precio a un plan aquí sería inventarlo:
+   el esquema de cobro se define con el Director antes de salir de beta. */
+const PLANES = [
+  { clave: 'beta',      txt: 'Beta — sin costo' },
+  { clave: 'mensual',   txt: 'Mensual' },
+  { clave: 'anual',     txt: 'Anual' },
+  { clave: 'cortesia',  txt: 'Cortesía' },
+];
+
+async function cargarAfiliacion() {
+  if (!window.sbClient) { AFILIACION.error = 'Sin conexión a la base.'; AFILIACION.cargado = true; return; }
+  try {
+    // De la tabla y no de la vista pública: `plan`, `susp_history` y
+    // `created_at` no se exponen ahí, y con razón.
+    const { data, error } = await sbClient.from('agentes')
+      .select('id, nombre, plan, activo, hidden, suspended, suspended_from, susp_history, created_at')
+      .order('nombre');
+    if (error) throw error;
+    AFILIACION.filas = data || [];
+    AFILIACION.error = '';
+  } catch (e) {
+    AFILIACION.error = e.message || 'No se pudo leer la afiliación.';
+    console.warn('Afiliación:', e);
+  }
+  AFILIACION.cargado = true;
+}
+
+/* Días suspendido dentro del mes en curso. Los rangos de `susp_history` pueden
+   venir de meses anteriores o seguir abiertos, así que cada uno se recorta
+   contra los límites del mes antes de contarlo. */
+function diasSuspendidoEnMes(agente, inicioMes, hoy) {
+  const rangos = Array.isArray(agente.susp_history) ? agente.susp_history.slice() : [];
+  // Una suspensión en curso puede no estar todavía en el historial si viene de
+  // antes del trigger; se toma de `suspended_from` para no perderla.
+  if (agente.suspended && agente.suspended_from &&
+      !rangos.some((r) => r.desde === agente.suspended_from && !r.hasta)) {
+    rangos.push({ desde: agente.suspended_from });
+  }
+  let dias = 0;
+  rangos.forEach((r) => {
+    if (!r.desde) return;
+    const desde = new Date(r.desde + 'T00:00:00');
+    const hasta = r.hasta ? new Date(r.hasta + 'T00:00:00') : hoy;
+    const a = desde > inicioMes ? desde : inicioMes;
+    const b = hasta < hoy ? hasta : hoy;
+    if (b >= a) dias += Math.round((b - a) / 86400000) + 1;
+  });
+  return dias;
+}
+
+function activarAfiliacion() {
+  $$('.afil-plan').forEach((sel) => sel.addEventListener('change', async () => {
+    const aviso = $('#afilAviso');
+    const id = sel.dataset.agenteId;
+    const previo = AFILIACION.filas.find((f) => f.id === id);
+    if (!window.sbClient) { aviso.innerHTML = '<p class="imp-error">Sin conexión.</p>'; return; }
+    sel.disabled = true;
+    try {
+      const { error } = await sbClient.from('agentes').update({ plan: sel.value }).eq('id', id);
+      if (error) throw error;
+      if (previo) previo.plan = sel.value;
+      aviso.innerHTML = `<p class="imp-ok"><i class="fas fa-circle-check"></i>
+        Plan actualizado para ${esc(previo ? previo.nombre : 'el agente')}.</p>`;
+    } catch (e) {
+      if (previo) sel.value = previo.plan || 'beta';
+      aviso.innerHTML = `<p class="imp-error">No se pudo guardar: ${esc(e.message || 'error')}</p>`;
+    } finally {
+      sel.disabled = false;
+    }
+  }));
+}
+
+/* ===========================================================================
+   25. Alta de agente
+
+   Crear la cuenta de acceso necesita una llave de servidor que jamás debe
+   viajar al navegador, así que eso no se puede hacer desde aquí. Lo que sí se
+   puede —y es casi todo— es dejar la ficha completa: la fila en `usuarios`, la
+   de `agentes` y sus ramos. Después se crea el acceso y se vincula, igual que
+   se hizo con la cuenta del propio Director.
+
+   El paso que falta se explica en pantalla al terminar, con el correo ya
+   escrito, en vez de dejar al Director adivinando por qué su agente no entra.
+   =========================================================================== */
+
+const slugify = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50);
+
+function abrirAltaAgente() {
+  const viejo = $('#modalAlta');
+  if (viejo) viejo.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="modalAlta">
+      <div class="modal modal-ancho">
+        <div class="modal-header">
+          <h3 class="modal-title">Agregar agente</h3>
+          <button class="modal-close" onclick="closeModal('modalAlta')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="altaNombre">Nombre completo *</label>
+          <input class="form-input" id="altaNombre" autocomplete="off" />
+        </div>
+        <div class="imp-mapeo">
+          <div class="form-group">
+            <label class="form-label" for="altaCorreo">Correo *</label>
+            <input class="form-input" id="altaCorreo" type="email" autocomplete="off" />
+            <p class="modal-texto imp-nota">Será también su usuario para entrar.</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="altaWa">WhatsApp</label>
+            <input class="form-input" id="altaWa" placeholder="+52..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="altaCedula">Cédula CNSF</label>
+            <input class="form-input" id="altaCedula" placeholder="A1-000000" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="altaZona">Zona</label>
+            <input class="form-input" id="altaZona" list="altaZonas" />
+            <datalist id="altaZonas">
+              ${(CONFIG.ZONAS || []).map((z) => `<option value="${esc(z)}"></option>`).join('')}
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="altaExp">Años de experiencia</label>
+            <input class="form-input" id="altaExp" type="number" min="0" max="60" value="0" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="altaPlan">Plan</label>
+            <select class="form-input" id="altaPlan">
+              ${PLANES.map((p) => `<option value="${p.clave}">${p.txt}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ramos que maneja</label>
+          <div class="act-chips" id="altaRamos">
+            ${Object.entries(RAMOS).map(([k, v]) =>
+              `<button type="button" class="chip-tipo" data-ramo="${k}">${esc(v.label)}</button>`).join('')}
+          </div>
+        </div>
+        <div class="modal-acciones">
+          <button class="btn btn-ghost btn-sm" onclick="closeModal('modalAlta')">Cancelar</button>
+          <button class="btn btn-acento btn-sm" id="altaGuardar">
+            <i class="fas fa-user-plus"></i> Crear agente
+          </button>
+        </div>
+        <div id="altaAviso"></div>
+      </div>
+    </div>`);
+
+  $$('#altaRamos .chip-tipo').forEach((c) => c.addEventListener('click', () => c.classList.toggle('activo')));
+  $('#altaGuardar').addEventListener('click', guardarAltaAgente);
+  openModal('modalAlta');
+  $('#altaNombre').focus();
+}
+
+async function guardarAltaAgente() {
+  const aviso = $('#altaAviso');
+  const fallar = (m) => { aviso.innerHTML = `<p class="imp-error">${esc(m)}</p>`; };
+  const nombre = $('#altaNombre').value.trim();
+  const correo = $('#altaCorreo').value.trim();
+
+  if (!nombre) return fallar('El nombre es obligatorio.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) return fallar('Escribe un correo válido.');
+  if (!window.sbClient || !MI_USUARIO_ID) return fallar('Sin sesión con la base.');
+
+  const ramos = $$('#altaRamos .chip-tipo.activo').map((c) => c.dataset.ramo);
+  const btn = $('#altaGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando…';
+  aviso.innerHTML = '';
+
+  let usuarioId = null;
+  try {
+    // 1 · la persona
+    const { data: u, error: eU } = await sbClient.from('usuarios').insert({
+      nombre, email: correo, telefono: $('#altaWa').value.trim() || null,
+      rol: 'agente', director_id: MI_USUARIO_ID,
+    }).select('id').single();
+    if (eU) throw eU;
+    usuarioId = u.id;
+
+    // 2 · su ficha pública. El slug se hace único a mano porque la columna
+    //     lleva `unique` y dos "Juan Pérez" tumbarían el alta.
+    let slug = slugify(nombre);
+    if (AGENTES.some((a) => a.slug === slug)) slug = `${slug}-${String(Date.now()).slice(-4)}`;
+
+    const { data: ag, error: eA } = await sbClient.from('agentes').insert({
+      slug, usuario_id: usuarioId, director_id: MI_USUARIO_ID,
+      nombre, cedula: $('#altaCedula').value.trim() || null,
+      zona: $('#altaZona').value.trim() || null,
+      ciudad: CONFIG.CIUDAD,
+      anios_experiencia: Number($('#altaExp').value) || 0,
+      plan: $('#altaPlan').value,
+      // Entra oculto: sin foto ni descripción, publicarlo de inmediato deja una
+      // ficha vacía en el sitio. El Director lo muestra cuando esté completa.
+      hidden: true, activo: true, disponible: false, verificado: false,
+    }).select('id').single();
+    if (eA) throw eA;
+
+    if (ramos.length) {
+      const { error: eR } = await sbClient.from('ramos_agente')
+        .insert(ramos.map((r) => ({ agente_id: ag.id, ramo: r })));
+      if (eR) throw eR;
+    }
+
+    await cargarAgentes();
+    aviso.innerHTML = `
+      <p class="imp-ok"><i class="fas fa-circle-check"></i>
+        <b>${esc(nombre)}</b> quedó dado de alta y <b>oculto</b> del sitio
+        público, para que no aparezca con la ficha vacía.</p>
+      <div class="alta-pasos">
+        <p class="modal-texto"><b>Falta un paso que no se puede hacer desde aquí:</b>
+          crear su acceso. Requiere una llave de servidor que no debe viajar al
+          navegador, así que se hace desde el panel de administración de la base:</p>
+        <ol class="imp-lista">
+          <li>Crea el usuario con el correo <b>${esc(correo)}</b> y una contraseña temporal.</li>
+          <li>Marca la opción de confirmar el correo automáticamente.</li>
+          <li>Corre esto para enlazarlo con su ficha:</li>
+        </ol>
+        <pre class="alta-sql">update public.usuarios
+   set auth_user_id = (select id from auth.users where email = '${esc(correo)}')
+ where id = '${esc(usuarioId)}';</pre>
+        <button class="btn btn-ghost btn-sm" onclick="copiarSQLAlta(this)">
+          <i class="fas fa-copy"></i> Copiar
+        </button>
+      </div>`;
+    btn.remove();
+    repintarAgentes();
+  } catch (e) {
+    // Si la ficha falló después de crear la persona, queda una fila suelta que
+    // el Director no ve por ningún lado. Se limpia para no dejar basura.
+    if (usuarioId) { try { await sbClient.from('usuarios').delete().eq('id', usuarioId); } catch (x) { /* queda huérfana */ } }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-user-plus"></i> Crear agente';
+    fallar(e.message && e.message.includes('duplicate')
+      ? 'Ya hay alguien con ese correo o ese identificador.'
+      : (e.message || 'No se pudo crear.'));
+  }
+}
+
+function copiarSQLAlta(btn) {
+  const sql = btn.parentElement.querySelector('.alta-sql').textContent;
+  navigator.clipboard.writeText(sql)
+    .then(() => { btn.innerHTML = '<i class="fas fa-check"></i> Copiado'; })
+    .catch(() => showToast('No se pudo copiar. Selecciónalo a mano.'));
 }
