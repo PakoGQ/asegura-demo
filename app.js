@@ -1267,6 +1267,11 @@ const RESENAS_PENDIENTES = [
    los sustituye por lo que haya en Supabase. Se mantiene el respaldo demo para
    que el panel siga siendo navegable sin base — igual que hace `cargarAgentes()`
    con el directorio público. */
+/* Mi fila de `usuarios` con la sesión abierta. Lleva nombre, correo de
+   contacto y rol — que no son lo mismo que el correo de acceso, que vive en
+   Supabase Auth. */
+let MI_USUARIO = null;
+
 let CITAS       = CITAS_DEMO;
 let RESENAS_MOD = RESENAS_PENDIENTES;   // pendientes de moderar
 let RESENAS_OK  = [];                   // ya publicadas
@@ -1488,7 +1493,10 @@ async function initPanelDirector() {
   const sesion = await guardPanel('director');
   if (!sesion) return;
 
-  await cargarDatosDirector(sesion);
+  MI_USUARIO = sesion.usuario;
+  MI_USUARIO_ID = sesion.demo ? null : sesion.usuario.id;
+
+  await Promise.all([cargarDatosDirector(sesion), cargarCorreoAcceso()]);
 
   $('#pdQuien').innerHTML = `<b>${esc(sesion.usuario.nombre)}</b>${sesion.demo ? ' · demo' : ''}`;
 
@@ -1504,6 +1512,7 @@ async function initPanelDirector() {
     main.scrollTop = 0;
     if (sec === 'resenas')       activarModeracion();
     if (sec === 'agentes') repintarAgentes();
+    if (sec === 'config')  activarConfig();
     if (sec === 'postulaciones') activarPostulaciones();
     if (sec === 'dashboard') buildGraficasDirector();
     if (sec === 'cartera')   entrarACartera(() => { main.innerHTML = seccionCartera(true); });
@@ -1890,30 +1899,75 @@ const SECCIONES_DIRECTOR = {
   equipo()  { return seccionEquipo(); },
 
   config() {
+    const u = MI_USUARIO || {};
     return `
       <h1 class="admin-page-title">Configuración</h1>
-      <p class="admin-page-sub">Lo que cambia aquí afecta al sitio público</p>
-      <div class="admin-card">
-        <div class="form-group">
-          <label class="form-label">Nombre de la plataforma</label>
-          <input class="form-input" value="${esc(CONFIG.MARCA)}" />
+      <p class="admin-page-sub">Tu acceso, tus datos y los del sitio</p>
+
+      <section class="admin-card">
+        <h2>Tu acceso</h2>
+        <p class="modal-texto">Con esto entras al panel. Es lo único que
+          Supabase valida al iniciar sesión.</p>
+        <div class="cfg-dato">
+          <div>
+            <span class="form-label">Correo de acceso</span>
+            <b id="cfgCorreoActual">${esc(CORREO_ACCESO || '—')}</b>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="abrirCambioCorreo()">
+            <i class="fas fa-envelope"></i> Cambiar
+          </button>
         </div>
-        <div class="form-group">
-          <label class="form-label">Aseguradora</label>
-          <input class="form-input" value="${esc(CONFIG.ASEGURADORA)}" />
+        <div class="cfg-dato">
+          <div>
+            <span class="form-label">Contraseña</span>
+            <b>••••••••</b>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="abrirCambioPassword()">
+            <i class="fas fa-key"></i> Cambiar
+          </button>
         </div>
+      </section>
+
+      <section class="admin-card">
+        <h2>Tus datos</h2>
+        <p class="modal-texto">Cómo apareces dentro del panel. El correo de aquí
+          es de contacto: <b>no</b> sirve para iniciar sesión.</p>
         <div class="form-group">
-          <label class="form-label">Ciudad</label>
-          <input class="form-input" value="${esc(CONFIG.CIUDAD)}" />
+          <label class="form-label" for="cfgNombre">Nombre</label>
+          <input class="form-input" id="cfgNombre" value="${esc(u.nombre || '')}" />
         </div>
-        <div class="form-group">
-          <label class="form-label">WhatsApp central</label>
-          <input class="form-input" value="+${esc(CONFIG.WHATSAPP_CENTRAL)}" />
+        <div class="imp-mapeo">
+          <div class="form-group">
+            <label class="form-label" for="cfgEmail">Correo de contacto</label>
+            <input class="form-input" id="cfgEmail" type="email" value="${esc(u.email || '')}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="cfgTel">Teléfono</label>
+            <input class="form-input" id="cfgTel" value="${esc(u.telefono || '')}" />
+          </div>
         </div>
-        <button class="btn btn-acento" onclick="showToast('En demo no se guarda. Estos valores viven en supabase-config.js.')">
+        <button class="btn btn-acento btn-sm" id="cfgGuardarDatos">
           <i class="fas fa-floppy-disk"></i> Guardar
         </button>
-      </div>`;
+        <div id="cfgAvisoDatos"></div>
+      </section>
+
+      <section class="admin-card">
+        <h2>El sitio</h2>
+        <p class="modal-texto">Estos valores viven en <code>supabase-config.js</code>,
+          un archivo del repositorio, no en la base. Se cambian editando ese
+          archivo y volviendo a publicar; por eso aquí solo se muestran.</p>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <tbody>
+              <tr><td>Marca</td><td><b>${esc(CONFIG.MARCA)} ${esc(CONFIG.SUBMARCA || '')}</b></td></tr>
+              <tr><td>Aseguradora</td><td><b>${esc(CONFIG.ASEGURADORA || '—')}</b></td></tr>
+              <tr><td>Ciudad</td><td><b>${esc(CONFIG.CIUDAD)}</b></td></tr>
+              <tr><td>WhatsApp central</td><td><b>+${esc(CONFIG.WHATSAPP_CENTRAL)}</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>`;
   },
 };
 
@@ -3975,4 +4029,187 @@ function repintarAgentes() {
   if (sel) sel.addEventListener('change', () => { ORDEN_AGENTES = sel.value; repintarAgentes(); });
 
   if (!EQUIPO.cargado && window.sbClient) cargarEquipo().then(repintarAgentes);
+}
+
+/* ===========================================================================
+   23. Cuenta — cambiar correo de acceso, contraseña y datos propios
+
+   Hay DOS correos y confundirlos es lo más fácil del mundo:
+     · el de Supabase Auth  → la credencial con la que entras
+     · `usuarios.email`     → un dato de contacto que se muestra en el panel
+   Cambiar uno no cambia el otro, y la pantalla lo dice explícitamente.
+   =========================================================================== */
+
+let CORREO_ACCESO = '';
+
+async function cargarCorreoAcceso() {
+  if (!window.sbClient) return;
+  try {
+    const { data } = await sbClient.auth.getUser();
+    CORREO_ACCESO = (data && data.user && data.user.email) || '';
+  } catch (e) { console.warn('No se pudo leer el correo de acceso:', e.message); }
+}
+
+/* Supabase deja cambiar contraseña con solo tener la sesión abierta. Eso
+   significa que una sesión olvidada en una computadora ajena basta para
+   quedarse con la cuenta. Se exige la contraseña actual, y la única forma de
+   comprobarla es intentar iniciar sesión con ella: si falla, no se toca nada.
+   Un intento fallido no cierra la sesión que ya estaba abierta. */
+async function confirmarPasswordActual(actual) {
+  const { error } = await sbClient.auth.signInWithPassword({
+    email: CORREO_ACCESO, password: actual,
+  });
+  if (error) throw new Error('La contraseña actual no es correcta.');
+}
+
+function modalCuenta(id, titulo, cuerpo, textoBoton) {
+  const viejo = $('#' + id);
+  if (viejo) viejo.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="${id}">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">${titulo}</h3>
+          <button class="modal-close" onclick="closeModal('${id}')"><i class="fas fa-times"></i></button>
+        </div>
+        ${cuerpo}
+        <div class="modal-acciones">
+          <button class="btn btn-ghost btn-sm" onclick="closeModal('${id}')">Cancelar</button>
+          <button class="btn btn-acento btn-sm" id="${id}Ok">${textoBoton}</button>
+        </div>
+        <div id="${id}Aviso"></div>
+      </div>
+    </div>`);
+  openModal(id);
+}
+
+function abrirCambioPassword() {
+  modalCuenta('modalPass', 'Cambiar contraseña', `
+    <div class="form-group">
+      <label class="form-label" for="passActual">Contraseña actual</label>
+      <input class="form-input" id="passActual" type="password" autocomplete="current-password" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="passNueva">Contraseña nueva</label>
+      <input class="form-input" id="passNueva" type="password" autocomplete="new-password" />
+      <p class="modal-texto imp-nota">Mínimo 8 caracteres. Guárdala en tu gestor
+        de contraseñas: si la pierdes, la recuperación va por correo y depende
+        de que el correo de acceso sea una bandeja real.</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="passRepite">Repite la nueva</label>
+      <input class="form-input" id="passRepite" type="password" autocomplete="new-password" />
+    </div>`, 'Cambiar contraseña');
+
+  $('#modalPassOk').addEventListener('click', async () => {
+    const aviso = $('#modalPassAviso');
+    const actual = $('#passActual').value;
+    const nueva  = $('#passNueva').value;
+    const repite = $('#passRepite').value;
+    const fallar = (m) => { aviso.innerHTML = `<p class="imp-error">${esc(m)}</p>`; };
+
+    if (!actual)              return fallar('Escribe tu contraseña actual.');
+    if (nueva.length < 8)     return fallar('La nueva debe tener al menos 8 caracteres.');
+    if (nueva !== repite)     return fallar('Las dos contraseñas nuevas no coinciden.');
+    if (nueva === actual)     return fallar('La nueva es igual a la actual.');
+    if (!window.sbClient)     return fallar('Sin conexión a la base.');
+
+    const btn = $('#modalPassOk');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cambiando…';
+    aviso.innerHTML = '';
+    try {
+      await confirmarPasswordActual(actual);
+      const { error } = await sbClient.auth.updateUser({ password: nueva });
+      if (error) throw error;
+      aviso.innerHTML = '<p class="imp-ok"><i class="fas fa-circle-check"></i> Listo. La próxima vez entra con la nueva.</p>';
+      btn.remove();
+      setTimeout(() => closeModal('modalPass'), 2200);
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = 'Cambiar contraseña';
+      fallar(e.message || 'No se pudo cambiar.');
+    }
+  });
+}
+
+function abrirCambioCorreo() {
+  modalCuenta('modalCorreo', 'Cambiar correo de acceso', `
+    <p class="modal-texto">Hoy entras con <b>${esc(CORREO_ACCESO || '—')}</b>.</p>
+    <div class="form-group">
+      <label class="form-label" for="mailNuevo">Correo nuevo</label>
+      <input class="form-input" id="mailNuevo" type="email" autocomplete="email" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="mailPass">Tu contraseña actual</label>
+      <input class="form-input" id="mailPass" type="password" autocomplete="current-password" />
+    </div>
+    <p class="modal-texto imp-nota">
+      <b>Ojo:</b> Supabase manda un enlace de confirmación al correo nuevo y el
+      cambio <b>no surte efecto</b> hasta que lo abras. Si pones una dirección
+      que no existe, el enlace no llega y te quedas con la de siempre — no te
+      quedas fuera, pero tampoco cambia nada.
+    </p>`, 'Enviar confirmación');
+
+  $('#modalCorreoOk').addEventListener('click', async () => {
+    const aviso = $('#modalCorreoAviso');
+    const nuevo = $('#mailNuevo').value.trim();
+    const pass  = $('#mailPass').value;
+    const fallar = (m) => { aviso.innerHTML = `<p class="imp-error">${esc(m)}</p>`; };
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nuevo)) return fallar('Ese correo no tiene forma válida.');
+    if (nuevo.toLowerCase() === String(CORREO_ACCESO).toLowerCase()) return fallar('Es el mismo que ya usas.');
+    if (!pass)            return fallar('Escribe tu contraseña actual.');
+    if (!window.sbClient) return fallar('Sin conexión a la base.');
+
+    const btn = $('#modalCorreoOk');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando…';
+    aviso.innerHTML = '';
+    try {
+      await confirmarPasswordActual(pass);
+      const { error } = await sbClient.auth.updateUser({ email: nuevo });
+      if (error) throw error;
+      aviso.innerHTML = `<p class="imp-ok"><i class="fas fa-circle-check"></i>
+        Te mandamos un enlace a <b>${esc(nuevo)}</b>. Ábrelo para que el cambio
+        surta efecto; mientras tanto sigue entrando con el correo de siempre.</p>`;
+      btn.remove();
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = 'Enviar confirmación';
+      fallar(e.message || 'No se pudo cambiar.');
+    }
+  });
+}
+
+function activarConfig() {
+  const btn = $('#cfgGuardarDatos');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const aviso = $('#cfgAvisoDatos');
+    const nombre = $('#cfgNombre').value.trim();
+    if (!nombre) { aviso.innerHTML = '<p class="imp-error">El nombre no puede quedar vacío.</p>'; return; }
+    if (!window.sbClient || !MI_USUARIO_ID) {
+      aviso.innerHTML = '<p class="imp-error">Sin sesión con la base.</p>'; return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
+    try {
+      const parche = {
+        nombre,
+        email: $('#cfgEmail').value.trim() || null,
+        telefono: $('#cfgTel').value.trim() || null,
+      };
+      const { error } = await sbClient.from('usuarios').update(parche).eq('id', MI_USUARIO_ID);
+      if (error) throw error;
+      MI_USUARIO = Object.assign({}, MI_USUARIO, parche);
+      $('#pdQuien').innerHTML = `<b>${esc(nombre)}</b>`;
+      aviso.innerHTML = '<p class="imp-ok"><i class="fas fa-circle-check"></i> Guardado.</p>';
+    } catch (e) {
+      aviso.innerHTML = `<p class="imp-error">No se pudo guardar: ${esc(e.message || 'error')}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Guardar';
+    }
+  });
 }
