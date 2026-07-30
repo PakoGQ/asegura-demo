@@ -440,6 +440,34 @@ function initNav() {
    =========================================================================== */
 const RUTA_INICIO = { director: 'panel-director.html', agente: 'panel-agente.html' };
 
+/* Antes cualquier fallo decía «Correo o contraseña incorrectos», incluido el
+   límite de intentos, el correo sin confirmar y una caída de red. Eso deja al
+   usuario probando la misma contraseña una y otra vez sin saber que el problema
+   es otro. Ahora se distingue, y lo que no se reconoce se muestra tal cual en
+   vez de esconderse detrás de un mensaje genérico. */
+function motivoDeLoginFallido(error) {
+  const codigo = (error.code || '').toLowerCase();
+  const texto = (error.message || '').toLowerCase();
+  const es = (x) => codigo.includes(x) || texto.includes(x);
+
+  if (es('invalid_credentials') || es('invalid login credentials')) {
+    return 'Correo o contraseña incorrectos.';
+  }
+  if (es('email_not_confirmed') || es('email not confirmed')) {
+    return 'Esa cuenta existe pero su correo no está confirmado. Tu director tiene que confirmarla.';
+  }
+  if (es('rate limit') || es('over_request_rate')) {
+    return 'Demasiados intentos seguidos. Espera un minuto y vuelve a probar.';
+  }
+  if (es('user_banned')) return 'Esa cuenta está bloqueada. Contacta a tu director.';
+  if (es('failed to fetch') || es('network')) {
+    return 'No hay conexión con el servidor. Revisa tu internet.';
+  }
+  // Nada reconocido: se muestra el mensaje original, que es más útil que
+  // inventar una causa.
+  return `No se pudo entrar: ${error.message || 'error desconocido'}`;
+}
+
 async function doLogin() {
   const err   = $('#loginError');
   const email = $('#loginEmail').value.trim();
@@ -457,7 +485,7 @@ async function doLogin() {
   if (!email || !pass) { fallar('Escribe tu correo y tu contraseña.'); return; }
 
   const { error } = await sbClient.auth.signInWithPassword({ email, password: pass });
-  if (error) { fallar('Correo o contraseña incorrectos.'); return; }
+  if (error) { fallar(motivoDeLoginFallido(error)); return; }
 
   const { data: sesion } = await sbClient.auth.getUser();
   const { data: usuario } = await sbClient
