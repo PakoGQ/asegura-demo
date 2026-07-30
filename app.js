@@ -5012,6 +5012,7 @@ function activarPerfilAgente() {
 
 /* Un solo punto para enganchar lo que cada sección del agente necesita. */
 function activarPanelAgente(sec) {
+  if (sec === 'estadisticas') buildGraficasAgente();
   if (sec === 'agenda')    activarAgenda();
   if (sec === 'perfil')    activarPerfilAgente();
   if (sec === 'citas')     activarCitasAgente();
@@ -5028,4 +5029,201 @@ function activarCitasAgente() {
   }));
   $$('[data-cita-estado]').forEach((b) => b.addEventListener('click', () =>
     cambiarEstadoCita(b.dataset.citaId, b.dataset.citaEstado, b)));
+}
+
+/* ===========================================================================
+   28. Mis resultados (panel del Agente)
+
+   El equivalente del dashboard del Director, pero de lo propio. Todo sale de
+   `MIS_CITAS`, `MIS_RESENAS` y `CARTERA`, o sea de la base.
+
+   Lo que NO se grafica, a propósito: cuántas citas se volvieron cliente. El
+   dato existiría en `clientes.cita_origen_id`, pero hoy nadie lo llena, así que
+   cualquier número ahí sería inventado. Está anotado en docs/pendientes.md.
+   =========================================================================== */
+
+const GRAFICAS_AG = [];
+
+SECCIONES_AGENTE.estadisticas = function () {
+  if (!CARTERA.cargado) {
+    cargarCartera().then(() => {
+      const m = $('#paMain');
+      if (m) { m.innerHTML = SECCIONES_AGENTE.estadisticas(); activarPanelAgente('estadisticas'); }
+    });
+    return '<p class="admin-vacio"><i class="fas fa-spinner fa-spin"></i> Cargando tus números…</p>';
+  }
+
+  const citas = misCitasDeHoy();
+  const mes = hoyISO().slice(0, 7);
+  const delMes = citas.filter((c) => c.fecha.slice(0, 7) === mes);
+
+  // Tasa de cierre solo sobre las citas ya RESUELTAS. Meter las pendientes en
+  // el denominador castiga al agente por citas que todavía no ha atendido.
+  const resueltas = citas.filter((c) => ['completada', 'cancelada', 'no_asistio'].includes(c.estado));
+  const cerradas = resueltas.filter((c) => c.estado === 'completada').length;
+  const tasa = resueltas.length ? Math.round(cerradas / resueltas.length * 100) : null;
+
+  const vivas = CARTERA.polizas.filter((p) => p.estatus === 'activa' || p.estatus === 'por_vencer');
+  const prima = vivas.reduce((s, p) => s + Number(p.prima_anual || 0), 0);
+  const comision = vivas.reduce((s, p) =>
+    s + (p.comision_estimada !== undefined && p.comision_estimada !== null
+      ? Number(p.comision_estimada)
+      : Number(p.prima_anual || 0) * Number(p.comision_pct || 0) / 100), 0);
+
+  const publicadas = DATOS_REALES_AGENTE ? MIS_RESENAS.filter((r) => r.aprobada) : [];
+
+  return `
+    <h1 class="admin-page-title">Mis resultados</h1>
+    <p class="admin-page-sub">Cómo vas, con tus números reales</p>
+
+    <div class="kpi-grid">
+      ${kpi('fa-calendar-check', 'Citas este mes', delMes.length,
+            `${citas.filter((c) => c.estado === 'pendiente').length} por confirmar`)}
+      ${kpi('fa-bullseye', 'Citas que cerraste',
+            tasa === null ? '—' : tasa + '%',
+            tasa === null ? 'aún sin citas resueltas' : `${cerradas} de ${resueltas.length} atendidas`)}
+      ${kpi('fa-file-contract', 'Pólizas vigentes', vivas.length, `${CARTERA.polizas.length} en total`)}
+      ${kpi('fa-coins', 'Prima bajo gestión', money(prima), 'anual, de las vigentes')}
+      ${kpi('fa-hand-holding-dollar', 'Tu comisión', money(comision), 'estimada sobre esa prima')}
+      ${kpi('fa-star', 'Tu calificación',
+            Number(YO_AGENTE.calificacion || 0).toFixed(1),
+            `${publicadas.length} reseña${publicadas.length === 1 ? '' : 's'} publicada${publicadas.length === 1 ? '' : 's'}`)}
+    </div>
+
+    <div class="graficas-grid">
+      <section class="admin-card grafica-card">
+        <h2>Tus citas por mes</h2>
+        <p class="grafica-sub">Últimos 6 meses</p>
+        <div class="grafica-lienzo"><canvas id="agCitasMes"></canvas></div>
+      </section>
+
+      <section class="admin-card grafica-card">
+        <h2>En qué acabaron</h2>
+        <p class="grafica-sub">Todas tus citas</p>
+        <div class="grafica-lienzo"><canvas id="agEstados"></canvas></div>
+      </section>
+
+      <section class="admin-card grafica-card">
+        <h2>De dónde viene tu cartera</h2>
+        <p class="grafica-sub">Prima anual por ramo</p>
+        <div class="grafica-lienzo"><canvas id="agRamos"></canvas></div>
+      </section>
+
+      <section class="admin-card grafica-card">
+        <h2>Lo que tienes por renovar</h2>
+        <p class="grafica-sub">Prima que vence en los próximos 6 meses</p>
+        <div class="grafica-lienzo"><canvas id="agVencen"></canvas></div>
+      </section>
+    </div>
+
+    <p class="admin-nota"><i class="fas fa-circle-info"></i>
+      «Citas que cerraste» cuenta solo las ya atendidas: las que están por
+      confirmar no cuentan en contra. La comisión es una estimación sobre la
+      prima anual con el porcentaje de cada póliza, no lo ya cobrado.
+      «Lo que tienes por renovar» es el trabajo que ya tienes ganado si le das
+      seguimiento a tiempo.</p>`;
+};
+
+function buildGraficasAgente() {
+  while (GRAFICAS_AG.length) { try { GRAFICAS_AG.pop().destroy(); } catch (e) { /* ya no existía */ } }
+
+  const lienzos = ['agCitasMes', 'agEstados', 'agRamos', 'agVencen'].map((id) => $('#' + id));
+  if (!lienzos[0]) return;
+
+  if (typeof Chart === 'undefined') {
+    lienzos.forEach((c) => c && c.parentElement.replaceChildren(
+      Object.assign(document.createElement('p'), {
+        className: 'admin-vacio',
+        textContent: 'No se pudo cargar Chart.js. Revisa la conexión.',
+      })));
+    return;
+  }
+
+  const azul    = tokenColor('--vaxti-azul', '#00224f');
+  const naranja = tokenColor('--vaxti-naranja', '#fe6031');
+  const tinta   = tokenColor('--t2', '#5a6478');
+  const citas   = misCitasDeHoy();
+  const vivas   = CARTERA.polizas.filter((p) => p.estatus === 'activa' || p.estatus === 'por_vencer');
+
+  const vacio = (canvas, msg) => canvas.parentElement.replaceChildren(
+    Object.assign(document.createElement('p'), { className: 'admin-vacio', textContent: msg }));
+
+  const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+  /* 1 · citas por mes, con los meses en cero incluidos */
+  const hoy = new Date();
+  const meses = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    meses.push({ clave: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, txt: MES[d.getMonth()] });
+  }
+  GRAFICAS_AG.push(new Chart(lienzos[0], {
+    type: 'line',
+    data: {
+      labels: meses.map((m) => m.txt),
+      datasets: [{
+        data: meses.map((m) => citas.filter((c) => c.fecha.slice(0, 7) === m.clave).length),
+        borderColor: naranja, backgroundColor: 'rgba(254,96,49,.10)',
+        fill: true, tension: .35, pointBackgroundColor: naranja, pointRadius: 4,
+      }],
+    },
+    options: ejesSobrios(tinta),
+  }));
+
+  /* 2 · en qué acabaron */
+  const porEstado = {};
+  citas.forEach((c) => { porEstado[c.estado] = (porEstado[c.estado] || 0) + 1; });
+  const estados = Object.keys(porEstado);
+  if (!estados.length) vacio(lienzos[1], 'Todavía no tienes citas.');
+  else GRAFICAS_AG.push(new Chart(lienzos[1], {
+    type: 'doughnut',
+    data: {
+      labels: estados.map((e) => (ETIQUETA_ESTADO[e] || { txt: e }).txt),
+      datasets: [{
+        data: estados.map((e) => porEstado[e]),
+        backgroundColor: [naranja, azul, '#4caf82', '#8892a4', '#e05252'],
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: { legend: { position: 'bottom', labels: { color: tinta, font: { size: 11 }, boxWidth: 12 } } },
+    },
+  }));
+
+  /* 3 · prima por ramo. Se grafica dinero y no número de pólizas: tres pólizas
+         de auto pueden valer menos que una empresarial. */
+  const porRamo = {};
+  vivas.forEach((p) => {
+    porRamo[p.ramo] = (porRamo[p.ramo] || 0) + Number(p.prima_anual || 0);
+  });
+  const ramos = Object.keys(porRamo).sort((a, b) => porRamo[b] - porRamo[a]);
+  if (!ramos.length) vacio(lienzos[2], 'Sin pólizas todavía. Cárgalas en Mi cartera.');
+  else GRAFICAS_AG.push(new Chart(lienzos[2], {
+    type: 'bar',
+    data: {
+      labels: ramos.map((r) => (RAMOS[r] || {}).label || r),
+      datasets: [{ data: ramos.map((r) => porRamo[r]), backgroundColor: azul, borderRadius: 4, barThickness: 18 }],
+    },
+    options: { ...ejesSobrios(tinta), indexAxis: 'y' },
+  }));
+
+  /* 4 · vencimientos de los próximos 6 meses, en dinero */
+  const proximos = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1);
+    proximos.push({ clave: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, txt: MES[d.getMonth()] });
+  }
+  const montos = proximos.map((m) => vivas
+    .filter((p) => String(p.fecha_vencimiento || '').slice(0, 7) === m.clave)
+    .reduce((s, p) => s + Number(p.prima_anual || 0), 0));
+  if (!montos.some((x) => x > 0)) vacio(lienzos[3], 'Nada vence en los próximos 6 meses.');
+  else GRAFICAS_AG.push(new Chart(lienzos[3], {
+    type: 'bar',
+    data: {
+      labels: proximos.map((m) => m.txt),
+      datasets: [{ data: montos, backgroundColor: naranja, borderRadius: 4 }],
+    },
+    options: ejesSobrios(tinta),
+  }));
 }
