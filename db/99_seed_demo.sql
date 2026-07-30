@@ -141,10 +141,23 @@ begin
     (a4, 'gastos_medicos', false, false);
 
   -- ── Disponibilidad: próximos 30 días para quien está disponible ──────────
+  -- UNA FILA POR HORA, no un rango ancho por día.
+  --
+  -- Antes esto insertaba una sola fila de 09:00 a 18:00 por día. La rejilla del
+  -- panel guarda franjas de una hora y las lee comparando `hora_ini` exacto, así
+  -- que de ese rango ancho solo reconocía la casilla de las 9 y mostraba el
+  -- resto del día cerrado. Dos granularidades en la misma tabla no se pueden
+  -- leer con la misma consulta.
+  --
+  -- El contrato queda: una fila = una hora, `hora_fin` = `hora_ini` + 1 hora.
+  -- Las horas son las mismas que ofrece la rejilla (HORAS_AGENDA en app.js);
+  -- si se cambian allá, hay que cambiarlas aquí.
   insert into public.disponibilidad (agente_id, fecha, hora_ini, hora_fin, disponible)
-  select ag.id, d.fecha, '09:00'::time, '18:00'::time, true
+  select ag.id, d.fecha, h.hora, h.hora + interval '1 hour', true
     from public.agentes ag
     cross join (select generate_series(current_date, current_date + 30, '1 day')::date as fecha) d
+    cross join (select unnest(array['09:00','10:00','11:00','12:00','13:00',
+                                    '16:00','17:00','18:00']::time[]) as hora) h
    where ag.slug in ('ana-ramirez', 'luis-torres', 'miguel-aguirre')
      and extract(dow from d.fecha) between 1 and 5   -- solo días hábiles
   on conflict do nothing;

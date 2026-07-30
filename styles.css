@@ -8683,3 +8683,11 @@ a.panel-marca:hover .logo-img { opacity: .82; transition: var(--transition); }
   .semana-nav .btn .rotulo { display: none; }
   .semana-titulo { text-align: center; flex: 1; }
 }
+
+/* Cuántos horarios quedan libres ese día, en el calendario del perfil. Da al
+   cliente una señal de urgencia real en vez de un botón indistinguible. */
+.pf-dia-libres {
+  display: block; font-size: .62rem; font-weight: 700;
+  color: var(--acento); margin-top: .1rem;
+}
+.pf-dia.ocupado .pf-dia-libres { display: none; }

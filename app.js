@@ -838,7 +838,12 @@ async function initPerfil() {
   document.title = `${PERFIL.nombre} — agente de seguros en ${PERFIL.zona || PERFIL.ciudad} | ${CONFIG.MARCA}`;
   GALERIA = [PERFIL.foto].concat(FOTOS_APOYO);
 
-  const resenas = await cargarResenas(PERFIL);
+  // La agenda se pide junto con las reseñas: el calendario del sidebar la
+  // necesita para saber qué días ofrecer.
+  const [resenas] = await Promise.all([
+    cargarResenas(PERFIL),
+    cargarAgendaDelPerfil(PERFIL.id),
+  ]);
   root.innerHTML = plantillaPerfil(PERFIL, resenas);
   activarPerfil();
 }
@@ -1041,22 +1046,31 @@ function plantillaPerfil(a, resenas) {
 }
 
 function activarPerfil() {
-  // Próximos 10 días hábiles como disponibilidad de referencia.
+  // Los próximos 10 días, marcados con la disponibilidad REAL del agente.
   const cont = $('#pfDias');
   if (cont) {
     const dias = [];
     const d = new Date();
     while (dias.length < 10) {
       d.setDate(d.getDate() + 1);
-      const dow = d.getDay();
-      if (dow !== 0) dias.push(new Date(d));   // domingo no
+      if (d.getDay() !== 0) dias.push(new Date(d));   // domingo no
     }
+    const configurada = AGENDA_CONFIGURADA();
     cont.innerHTML = dias.map((f) => {
-      const libre = f.getDay() !== 6;          // sábado con agenda reducida
+      const iso = fechaISO(f);
+      // Si el agente configuró su agenda, manda ella. Si nunca la tocó, se
+      // muestran los días hábiles como antes: dejarlo sin citas por no haber
+      // entrado al panel sería castigarlo por algo que no sabe que existe.
+      const cuantas = configurada ? HORAS_LIBRES(iso).length : 0;
+      const libre = configurada ? cuantas > 0 : f.getDay() !== 6;
       return `<button class="pf-dia ${libre ? '' : 'ocupado'}"
-                ${libre ? `onclick="abrirAgendar('${fechaISO(f)}')"` : 'disabled'}>
+                ${libre ? `onclick="abrirAgendar('${iso}')"` : 'disabled'}
+                title="${libre
+                  ? (cuantas ? `${cuantas} horario${cuantas === 1 ? '' : 's'} libre${cuantas === 1 ? '' : 's'}` : 'Con agenda disponible')
+                  : 'Sin horarios ese día'}">
         <span class="pf-dia-sem">${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][f.getDay()]}</span>
         <span class="pf-dia-num">${f.getDate()}</span>
+        ${libre && cuantas ? `<span class="pf-dia-libres">${cuantas}</span>` : ''}
       </button>`;
     }).join('');
   }
@@ -1111,7 +1125,7 @@ function abrirAgendar(fecha) {
         </div>
         <div class="form-group">
           <label class="form-label" for="citaHora">Hora</label>
-          <input class="form-input" type="time" id="citaHora" required value="11:00" min="09:00" max="19:00" />
+          <select class="form-input" id="citaHora" required></select>
         </div>
       </div>
       <div class="form-row">
@@ -1146,7 +1160,34 @@ function abrirAgendar(fecha) {
     </form>`;
 
   $('#citaForm').addEventListener('submit', enviarCita);
+  pintarHorasLibres();
+  $('#citaFecha').addEventListener('change', pintarHorasLibres);
   openModal('citaModal');
+}
+
+/* Llena el selector de horas con las franjas que ese día tiene abiertas.
+
+   Antes la hora era un `<input type="time">` libre: el cliente podía pedir las
+   3 de la mañana, o una hora que el agente había cerrado, y la cita entraba
+   igual. Ahora solo se ofrece lo que está abierto de verdad. */
+function pintarHorasLibres() {
+  const sel = $('#citaHora');
+  const fecha = $('#citaFecha').value;
+  if (!sel) return;
+
+  // Sin agenda configurada se ofrece el horario de oficina completo, coherente
+  // con que el calendario muestre los días hábiles abiertos.
+  const horas = AGENDA_CONFIGURADA() ? HORAS_LIBRES(fecha) : HORAS_AGENDA;
+
+  if (!horas.length) {
+    sel.innerHTML = '<option value="">Sin horarios ese día</option>';
+    sel.value = '';
+    return;
+  }
+  const previa = sel.value;
+  sel.innerHTML = horas.map((h) => `<option value="${h}">${h}</option>`).join('');
+  // Se conserva la hora elegida si sigue disponible en la fecha nueva.
+  sel.value = horas.includes(previa) ? previa : horas[Math.floor(horas.length / 2)];
 }
 
 async function enviarCita(ev) {
@@ -5319,3 +5360,51 @@ function buildGraficasAgente() {
     options: ejesSobrios(tinta),
   }));
 }
+
+/* ===========================================================================
+   29. Disponibilidad real en el sitio público
+
+   El calendario del perfil generaba los próximos 10 días con una regla escrita
+   a mano («sábado con agenda reducida») e ignoraba por completo la tabla
+   `disponibilidad`. El agente podía cerrar toda su semana en el panel y el
+   cliente le seguía agendando igual: las dos mitades funcionaban por separado.
+
+   Contrato de la tabla: una fila = una hora, `hora_fin` = `hora_ini` + 1h.
+   Ver db/99_seed_demo.sql, que siembra con esa misma forma.
+   =========================================================================== */
+
+/* Franjas abiertas del agente del perfil, por fecha: { '2026-08-03': ['09:00', …] } */
+let AGENDA_PERFIL = null;   // null = no se pudo consultar todavía
+
+async function cargarAgendaDelPerfil(agenteId) {
+  AGENDA_PERFIL = null;
+  if (!window.sbClient || !agenteId) return;
+  try {
+    const { data, error } = await sbClient
+      .from('disponibilidad')
+      .select('fecha, hora_ini, disponible')
+      .eq('agente_id', agenteId)
+      .eq('disponible', true)
+      .gte('fecha', hoyISO())
+      .order('fecha');
+    if (error) throw error;
+    const porFecha = {};
+    (data || []).forEach((d) => {
+      const f = String(d.fecha).slice(0, 10);
+      (porFecha[f] = porFecha[f] || []).push(String(d.hora_ini).slice(0, 5));
+    });
+    Object.values(porFecha).forEach((hs) => hs.sort());
+    AGENDA_PERFIL = porFecha;
+  } catch (e) {
+    // Con null, el calendario cae al comportamiento de antes en vez de dejar al
+    // agente sin poder recibir citas por un error de red.
+    console.warn('No se pudo leer la disponibilidad del agente:', e.message);
+  }
+}
+
+const HORAS_LIBRES = (fecha) => (AGENDA_PERFIL && AGENDA_PERFIL[fecha]) || [];
+
+/* ¿Este agente configuró su agenda? Si nunca la tocó, no se le puede castigar
+   dejándolo sin citas: se muestran los días hábiles como antes. Pero si SÍ la
+   configuró, se respeta al pie de la letra, incluidos los días que cerró. */
+const AGENDA_CONFIGURADA = () => AGENDA_PERFIL !== null && Object.keys(AGENDA_PERFIL).length > 0;
