@@ -1189,10 +1189,36 @@ const entrarDemo = (rol) => {
 
 const sesionDemo = () => (DEMO ? sessionStorage.getItem('demo_rol') : null);
 
-function salirPanel() {
+/* Cerrar sesión de verdad.
+
+   Antes era `sbClient.auth.signOut(); location.href = ...` — sin esperar. Y
+   `signOut()` devuelve una promesa: navegar de inmediato aborta la petición a
+   medio vuelo y la sesión se queda viva en localStorage. El usuario creía haber
+   salido y seguía dentro; al volver al inicio, el botón de cuenta le ofrecía
+   «Mi panel». En una computadora compartida eso es dejar la cuenta abierta.
+
+   Ahora se espera, y solo entonces se navega. `replace` en vez de `href` para
+   que el botón de atrás no regrese al panel. */
+async function salirPanel(boton) {
+  if (boton) {
+    boton.disabled = true;
+    boton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saliendo…';
+  }
   sessionStorage.removeItem('demo_rol');
-  if (window.sbClient) sbClient.auth.signOut();
-  location.href = 'index.html';
+
+  if (window.sbClient) {
+    try {
+      const { error } = await sbClient.auth.signOut();
+      if (error) throw error;
+    } catch (e) {
+      // Si el servidor no contesta —sin red, token ya vencido— al menos se
+      // borra la sesión de este dispositivo. Salir nunca debe fallar en
+      // silencio y dejar al usuario dentro.
+      console.warn('signOut remoto falló, se cierra solo aquí:', e.message);
+      try { await sbClient.auth.signOut({ scope: 'local' }); } catch (x) { /* ya no hay nada que borrar */ }
+    }
+  }
+  location.replace('index.html');
 }
 
 /* Botones de demo dentro del modal de acceso. Solo existen si DEMO está on. */
