@@ -833,7 +833,9 @@ async function initPerfil() {
     return;
   }
 
-  document.title = `${PERFIL.nombre} — agente de seguros en ${PERFIL.zona || PERFIL.ciudad} | Asegura`;
+  // La marca sale de CONFIG y no escrita a mano: «Asegura» era el nombre viejo
+  // del proyecto y seguía saliendo en el título de cada perfil.
+  document.title = `${PERFIL.nombre} — agente de seguros en ${PERFIL.zona || PERFIL.ciudad} | ${CONFIG.MARCA}`;
   GALERIA = [PERFIL.foto].concat(FOTOS_APOYO);
 
   const resenas = await cargarResenas(PERFIL);
@@ -894,7 +896,7 @@ function plantillaPerfil(a, resenas) {
       </div>
     </a>`).join('');
 
-  const wa = waLink(a.whatsapp, `Hola ${a.nombre}, te vi en Asegura y quiero preguntarte sobre un seguro.`);
+  const wa = waLink(a.whatsapp, `Hola ${a.nombre}, te vi en ${CONFIG.MARCA} y quiero preguntarte sobre un seguro.`);
 
   return `
   <!-- Carrusel -->
@@ -1361,7 +1363,7 @@ async function cargarDatosDirector(sesion) {
   try {
     const [citas, resenas, postulaciones] = await Promise.all([
       sbClient.from('citas')
-        .select('id, agente_id, cliente_nombre, cliente_whatsapp, modalidad, ramo_interes, fecha, hora, estado, notas')
+        .select('id, agente_id, cliente_nombre, cliente_whatsapp, modalidad, ramo_interes, fecha, hora, estado, mensaje')
         .order('fecha', { ascending: false }),
       // Todas las reseñas de un jalón y se separan en memoria: son pocas y así
       // la pestaña de publicadas también sale de la base en vez de un arreglo.
@@ -1386,7 +1388,10 @@ async function cargarDatosDirector(sesion) {
       fecha: String(c.fecha).slice(0, 10),
       hora: String(c.hora || '').slice(0, 5),
       estado: c.estado,
-      mensaje: c.notas || '',
+      // `mensaje` es lo que escribió el cliente al agendar. `notas` es otra
+      // columna, privada del agente: leerla aquí mostraba las notas internas
+      // como si fueran palabras del cliente.
+      mensaje: c.mensaje || '',
     }));
     const todas = (resenas.data || []).map((r) => ({
       id: r.id,
@@ -4771,7 +4776,7 @@ async function cargarDatosAgente(sesion) {
   try {
     const [citas, disp, resenas] = await Promise.all([
       sbClient.from('citas')
-        .select('id, cliente_nombre, cliente_whatsapp, modalidad, lugar, ramo_interes, fecha, hora, estado, notas')
+        .select('id, cliente_nombre, cliente_whatsapp, modalidad, lugar, ramo_interes, fecha, hora, estado, mensaje')
         .order('fecha', { ascending: false }),
       sbClient.from('disponibilidad')
         .select('id, fecha, hora_ini, disponible')
@@ -4790,7 +4795,7 @@ async function cargarDatosAgente(sesion) {
       id: c.id, cliente: c.cliente_nombre, wa: c.cliente_whatsapp,
       modalidad: c.modalidad, lugar: c.lugar, ramo: c.ramo_interes,
       fecha: String(c.fecha).slice(0, 10), hora: String(c.hora || '').slice(0, 5),
-      estado: c.estado, mensaje: c.notas || '',
+      estado: c.estado, mensaje: c.mensaje || '',
       agente: YO_AGENTE.slug,
     }));
     MI_AGENDA = disp.data || [];
