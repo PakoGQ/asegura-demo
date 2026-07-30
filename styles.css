@@ -1697,7 +1697,13 @@ canvas { width: 100% !important; }
 
 /* ─── Panel el proyecto de referencia ────────────────────────────────────── */
 .agente-layout { display: flex; min-height: 100vh; padding-top: var(--nav-h); }
-.agente-sidebar { width: 240px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 2rem 0; position: sticky; top: var(--nav-h); height: calc(100vh - var(--nav-h)); overflow-y: auto; }
+/* Sin `width`: el ancho lo fija la columna del grid en `.admin-layout` y el
+   aside la llena solo. Traía `width: 240px` del layout flex del port, 30px más
+   que la columna, así que se desbordaba y tapaba la primera letra del título
+   —«Hola, Ana» salía sin la H—. Es el mismo desajuste que tenía
+   `.admin-sidebar`; se corrigió ahí primero y este quedó vivo porque es una
+   regla aparte. */
+.agente-sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 2rem 0; position: sticky; top: var(--nav-h); height: calc(100vh - var(--nav-h)); overflow-y: auto; }
 .agente-profile-mini { padding: 0 1.5rem 1.5rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
 .agente-profile-mini img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid var(--acento); margin-bottom: .6rem; }
 .agente-profile-mini .name { font-family: var(--font-serif); font-size: 1rem; }
