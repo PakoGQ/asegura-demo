@@ -2653,6 +2653,14 @@ const SECCIONES_AGENTE = {
   },
 };
 
+/* Si esa cita ya produjo un cliente, ofrecer registrarlo otra vez crearía un
+   duplicado. Devuelve false mientras los clientes no estén cargados: es mejor
+   ofrecer el botón y que el selector filtre, que esconderlo por no saber. */
+function citaYaEsCliente(citaId) {
+  if (!CLIENTES.cargado) return false;
+  return CLIENTES.filas.some((c) => c.cita_origen_id === citaId);
+}
+
 function filaCitaAgente(c) {
   const e = ETIQUETA_ESTADO[c.estado] || { txt: c.estado, clase: '' };
   const m = MODALIDADES[c.modalidad] || { label: c.modalidad, icono: 'fa-circle' };
@@ -2681,6 +2689,11 @@ function filaCitaAgente(c) {
               <i class="fas fa-user-slash"></i> No llegó</button>` : ''}
           <a class="btn btn-wa btn-sm" href="${esc(waLink(c.wa, `Hola ${c.cliente}, te escribo por tu cita.`))}"
              target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> Escribir</a>
+          ${c.estado === 'completada' ? (citaYaEsCliente(c.id)
+            ? '<span class="pill pill-ok pill-sm"><i class="fas fa-user-check"></i> Ya es tu cliente</span>'
+            : `<button class="btn btn-ghost btn-sm" onclick="abrirNuevoCliente('${esc(c.id)}')">
+                 <i class="fas fa-user-plus"></i> Registrar como cliente
+               </button>`) : ''}
           <button class="btn btn-ghost btn-sm" onclick="abrirResenaCliente('${esc(c.cliente)}', '${esc(c.wa || '')}')">
             <i class="fas fa-user-pen"></i> Nota del cliente
           </button>
@@ -3837,7 +3850,7 @@ async function cargarClientes() {
   try {
     // El RLS ya limita a los propios; no hace falta filtrar por agente aquí.
     const { data, error } = await sbClient
-      .from('clientes').select('id, nombre, telefono, email, rfc, created_at').order('nombre');
+      .from('clientes').select('id, nombre, telefono, email, rfc, cita_origen_id, created_at').order('nombre');
     if (error) throw error;
     CLIENTES.filas = data || [];
     CLIENTES.error = '';
@@ -3912,42 +3925,85 @@ function activarClientes() {
   });
 }
 
-function abrirNuevoCliente() {
-  if (!$('#modalCliente')) {
-    document.body.insertAdjacentHTML('beforeend', `
-      <div class="modal-overlay" id="modalCliente">
-        <div class="modal">
-          <div class="modal-header">
-            <h3 class="modal-title">Nuevo cliente</h3>
-            <button class="modal-close" onclick="closeModal('modalCliente')"><i class="fas fa-times"></i></button>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Nombre *</label>
-            <input class="form-input" id="cliNombre" autocomplete="off" />
-          </div>
-          <div class="imp-mapeo">
-            <div class="form-group"><label class="form-label">Teléfono</label>
-              <input class="form-input" id="cliTel" placeholder="+52..." /></div>
-            <div class="form-group"><label class="form-label">Correo</label>
-              <input class="form-input" id="cliMail" type="email" /></div>
-            <div class="form-group"><label class="form-label">RFC</label>
-              <input class="form-input" id="cliRfc" /></div>
-            <div class="form-group"><label class="form-label">Fecha de nacimiento</label>
-              <input class="form-input" id="cliNac" type="date" /></div>
-          </div>
-          <div class="modal-acciones">
-            <button class="btn btn-ghost btn-sm" onclick="closeModal('modalCliente')">Cancelar</button>
-            <button class="btn btn-acento btn-sm" id="cliGuardar">
-              <i class="fas fa-floppy-disk"></i> Guardar
-            </button>
-          </div>
-          <div id="cliAviso"></div>
+/* `citaId` opcional: cuando se entra desde una cita ya atendida, llega
+   preseleccionada. Es lo que llena `clientes.cita_origen_id`, la columna que
+   permite saber cuántas de las citas que llegan del directorio terminan en
+   venta — el número que dice si el producto sirve. Estaba en el esquema desde
+   el principio y nadie la llenaba. */
+async function abrirNuevoCliente(citaId) {
+  // Al entrar desde una cita puede que los clientes no estén cargados: sin
+  // ellos no se sabe qué citas ya produjeron uno y se ofrecerían repetidas.
+  if (!CLIENTES.cargado) await cargarClientes();
+
+  // Se regenera cada vez en vez de reutilizarse: la lista de citas elegibles
+  // cambia conforme se registran clientes, y un modal cacheado la mostraría
+  // desactualizada.
+  const viejo = $('#modalCliente');
+  if (viejo) viejo.remove();
+
+  // Solo las citas que ya se atendieron y que todavía no tienen cliente: una
+  // cita produce un cliente, no varios.
+  const usadas = new Set(CLIENTES.filas.map((c) => c.cita_origen_id).filter(Boolean));
+  const elegibles = misCitasDeHoy().filter((c) =>
+    ['completada', 'confirmada'].includes(c.estado) && !usadas.has(c.id));
+
+  const cita = elegibles.find((c) => c.id === citaId) || null;
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="modalCliente">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">Nuevo cliente</h3>
+          <button class="modal-close" onclick="closeModal('modalCliente')"><i class="fas fa-times"></i></button>
         </div>
-      </div>`);
-    $('#cliGuardar').addEventListener('click', guardarCliente);
-  }
-  ['cliNombre', 'cliTel', 'cliMail', 'cliRfc', 'cliNac'].forEach((id) => { if ($('#' + id)) $('#' + id).value = ''; });
-  $('#cliAviso').innerHTML = '';
+        <div class="form-group">
+          <label class="form-label" for="cliCita">¿De qué cita salió?</label>
+          <select class="form-input" id="cliCita">
+            <option value="">— no vino de una cita —</option>
+            ${elegibles.map((c) => `<option value="${esc(c.id)}"
+              ${c.id === citaId ? 'selected' : ''}>${esc(c.cliente)} · ${fechaCorta(c.fecha)}
+              · ${esc((RAMOS[c.ramo] || {}).label || c.ramo || 'sin ramo')}</option>`).join('')}
+          </select>
+          <p class="modal-texto imp-nota">Con esto se puede medir cuántas de las
+            citas que te llegan terminan en venta. Si el cliente te buscó por
+            fuera, déjalo en «no vino de una cita».</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="cliNombre">Nombre *</label>
+          <input class="form-input" id="cliNombre" autocomplete="off"
+                 value="${esc(cita ? cita.cliente : '')}" />
+        </div>
+        <div class="imp-mapeo">
+          <div class="form-group"><label class="form-label" for="cliTel">Teléfono</label>
+            <input class="form-input" id="cliTel" placeholder="+52..."
+                   value="${esc(cita ? (cita.wa || '') : '')}" /></div>
+          <div class="form-group"><label class="form-label" for="cliMail">Correo</label>
+            <input class="form-input" id="cliMail" type="email" /></div>
+          <div class="form-group"><label class="form-label" for="cliRfc">RFC</label>
+            <input class="form-input" id="cliRfc" /></div>
+          <div class="form-group"><label class="form-label" for="cliNac">Fecha de nacimiento</label>
+            <input class="form-input" id="cliNac" type="date" /></div>
+        </div>
+        <div class="modal-acciones">
+          <button class="btn btn-ghost btn-sm" onclick="closeModal('modalCliente')">Cancelar</button>
+          <button class="btn btn-acento btn-sm" id="cliGuardar">
+            <i class="fas fa-floppy-disk"></i> Guardar
+          </button>
+        </div>
+        <div id="cliAviso"></div>
+      </div>
+    </div>`);
+
+  // Al elegir una cita se copian nombre y teléfono, que ya los dio el cliente
+  // al agendar: volverlos a teclear es una fuente de errores de dedo.
+  $('#cliCita').addEventListener('change', (ev) => {
+    const c = elegibles.find((x) => x.id === ev.target.value);
+    if (!c) return;
+    $('#cliNombre').value = c.cliente || '';
+    if (!$('#cliTel').value) $('#cliTel').value = c.wa || '';
+  });
+
+  $('#cliGuardar').addEventListener('click', guardarCliente);
   openModal('modalCliente');
   $('#cliNombre').focus();
 }
@@ -3970,12 +4026,18 @@ async function guardarCliente() {
       email: $('#cliMail').value.trim() || null,
       rfc: $('#cliRfc').value.trim() || null,
       fecha_nacimiento: $('#cliNac').value || null,
+      // De aquí sale la métrica de conversión. Vacío significa que el cliente
+      // llegó por otro lado, y eso también es información.
+      cita_origen_id: $('#cliCita').value || null,
     });
     if (error) throw error;
     CLIENTES.cargado = false;
     await cargarClientes();
     closeModal('modalCliente');
-    repintarClientes();
+    // El modal se puede abrir desde Mis clientes o desde una cita atendida.
+    // Repintar clientes cuando se está en citas dejaría la pantalla equivocada.
+    if ($('#cliBuscar')) repintarClientes();
+    else showToast(`${nombre} quedó registrado como tu cliente.`);
   } catch (e) {
     aviso.innerHTML = `<p class="imp-error">No se pudo guardar: ${esc(e.message || 'error')}</p>`;
   } finally {
@@ -5045,8 +5107,14 @@ function activarCitasAgente() {
 const GRAFICAS_AG = [];
 
 SECCIONES_AGENTE.estadisticas = function () {
-  if (!CARTERA.cargado) {
-    cargarCartera().then(() => {
+  // Hacen falta las dos: la cartera para prima y vencimientos, los clientes
+  // para saber qué citas se convirtieron. Se piden juntas y se repinta al
+  // llegar, en vez de mostrar la sección a medias.
+  if (!CARTERA.cargado || !CLIENTES.cargado) {
+    Promise.all([
+      CARTERA.cargado ? null : cargarCartera(),
+      CLIENTES.cargado ? null : cargarClientes(),
+    ]).then(() => {
       const m = $('#paMain');
       if (m) { m.innerHTML = SECCIONES_AGENTE.estadisticas(); activarPanelAgente('estadisticas'); }
     });
@@ -5072,6 +5140,19 @@ SECCIONES_AGENTE.estadisticas = function () {
 
   const publicadas = DATOS_REALES_AGENTE ? MIS_RESENAS.filter((r) => r.aprobada) : [];
 
+  // Conversión de cita a cliente. Sale de `clientes.cita_origen_id`, que se
+  // llena al registrar un cliente desde una cita atendida. El denominador son
+  // las citas COMPLETADAS: una que se canceló nunca tuvo oportunidad de
+  // convertir, y meterla castigaría al agente por algo que no dependió de él.
+  const atendidas = citas.filter((c) => c.estado === 'completada');
+  const conCliente = CLIENTES.cargado
+    ? new Set(CLIENTES.filas.map((c) => c.cita_origen_id).filter(Boolean))
+    : null;
+  const convertidas = conCliente
+    ? atendidas.filter((c) => conCliente.has(c.id)).length : null;
+  const conversion = (convertidas !== null && atendidas.length)
+    ? Math.round(convertidas / atendidas.length * 100) : null;
+
   return `
     <h1 class="admin-page-title">Mis resultados</h1>
     <p class="admin-page-sub">Cómo vas, con tus números reales</p>
@@ -5082,6 +5163,11 @@ SECCIONES_AGENTE.estadisticas = function () {
       ${kpi('fa-bullseye', 'Citas que cerraste',
             tasa === null ? '—' : tasa + '%',
             tasa === null ? 'aún sin citas resueltas' : `${cerradas} de ${resueltas.length} atendidas`)}
+      ${kpi('fa-handshake', 'Citas que se volvieron cliente',
+            conversion === null ? '—' : conversion + '%',
+            conCliente === null ? 'abre Mis clientes para calcularlo'
+              : atendidas.length ? `${convertidas} de ${atendidas.length} atendidas`
+              : 'aún sin citas atendidas')}
       ${kpi('fa-file-contract', 'Pólizas vigentes', vivas.length, `${CARTERA.polizas.length} en total`)}
       ${kpi('fa-coins', 'Prima bajo gestión', money(prima), 'anual, de las vigentes')}
       ${kpi('fa-hand-holding-dollar', 'Tu comisión', money(comision), 'estimada sobre esa prima')}
@@ -5121,7 +5207,13 @@ SECCIONES_AGENTE.estadisticas = function () {
       confirmar no cuentan en contra. La comisión es una estimación sobre la
       prima anual con el porcentaje de cada póliza, no lo ya cobrado.
       «Lo que tienes por renovar» es el trabajo que ya tienes ganado si le das
-      seguimiento a tiempo.</p>`;
+      seguimiento a tiempo.</p>
+
+    <p class="admin-nota"><i class="fas fa-handshake"></i>
+      <b>«Citas que se volvieron cliente»</b> se llena cuando registras a alguien
+      desde una cita atendida —el botón «Registrar como cliente»—. Es el número
+      que dice si las citas que te llegan realmente se convierten en negocio, así
+      que vale la pena registrarlos desde ahí y no como cliente suelto.</p>`;
 };
 
 function buildGraficasAgente() {
