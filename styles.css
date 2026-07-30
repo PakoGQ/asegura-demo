@@ -8159,14 +8159,48 @@ body { padding-top: var(--nav-h); }
 .semana-celda {
   border: 1px solid var(--border); border-radius: 4px; background: var(--surface);
   min-height: 30px; cursor: pointer; transition: var(--transition);
+  display: grid; place-items: center; padding: 0;
+  font-size: .66rem; font-weight: 700; line-height: 1;
 }
-.semana-celda.abierto { background: #fff0eb; border-color: rgba(254,96,49,.35); }
-.semana-celda:hover { border-color: var(--acento); }
+
+/* ABIERTO — naranja sólido, no un tinte con marco. Un color de relleno se lee
+   de un vistazo en una rejilla de 48 casillas; un borde teñido, no. */
+.semana-celda.abierto {
+  background: var(--acento); border-color: var(--acento); color: #fff;
+}
+
+/* CERRADO — con una X, para que no dependa solo del color. Se dibuja con
+   pseudoelemento y no con un carácter para que no lo lea un lector de
+   pantalla: el estado ya va en el `aria-label` del botón. */
+.semana-celda.cerrado::after {
+  content: ''; width: 9px; height: 9px; opacity: .45;
+  background:
+    linear-gradient(to bottom right, transparent 43%, var(--t3) 43%, var(--t3) 57%, transparent 57%),
+    linear-gradient(to bottom left,  transparent 43%, var(--t3) 43%, var(--t3) 57%, transparent 57%);
+}
+.semana-celda.cerrado:hover::after { opacity: .75; }
+
+/* CON CITA — azul de marca: es un compromiso, no un horario disponible. */
+.semana-celda.con-cita {
+  background: var(--vaxti-azul); border-color: var(--vaxti-azul); color: #fff;
+  cursor: not-allowed; opacity: 1;
+}
+.celda-cita {
+  display: block; max-width: 100%; padding: 0 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.semana-celda:hover:not([disabled]) { border-color: var(--acento); }
+/* Las casillas con cita están deshabilitadas pero NO deben verse apagadas: son
+   la información más importante de la rejilla. */
+.semana-celda.con-cita[disabled] { opacity: 1; }
+
 .leyenda-punto {
   display: inline-block; width: 10px; height: 10px; border-radius: 3px;
   background: var(--surface); border: 1px solid var(--border); vertical-align: middle;
 }
-.leyenda-punto.abierto { background: #fff0eb; border-color: rgba(254,96,49,.35); }
+.leyenda-punto.abierto  { background: var(--acento); border-color: var(--acento); }
+.leyenda-punto.con-cita { background: var(--vaxti-azul); border-color: var(--vaxti-azul); }
 
 /* Contenido */
 .contenido-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .6rem; }

@@ -2501,6 +2501,12 @@ const SECCIONES_AGENTE = {
       return f ? f.disponible : false;
     };
 
+    // Una cita ya agendada en esa franja. Se muestra encima de la casilla: de
+    // nada sirve saber que el horario está abierto si no se ve quién viene.
+    // Las canceladas no cuentan: ese hueco volvió a estar libre.
+    const citaEn = (fecha, hora) => misCitasDeHoy().find((c) =>
+      c.fecha === fecha && c.hora === hora && c.estado !== 'cancelada');
+
     return `
       <h1 class="admin-page-title">Disponibilidad</h1>
       <p class="admin-page-sub">Toca una casilla para abrir o cerrar ese horario</p>
@@ -2524,14 +2530,27 @@ const SECCIONES_AGENTE = {
             <div class="semana-hora">${h}</div>
             ${dias.map((d) => {
               const pasado = d.iso < hoy;
-              return `<button class="semana-celda ${abierta(d.iso, h) ? 'abierto' : ''}"
+              const cita = citaEn(d.iso, h);
+              // Con cita agendada la casilla no se puede cerrar: el cliente ya
+              // tiene el compromiso. Para librarla hay que cancelar la cita en
+              // Mis citas, y así queda claro que hay alguien a quien avisarle.
+              const e = cita ? (ETIQUETA_ESTADO[cita.estado] || { txt: cita.estado }) : null;
+              if (cita) return `<button class="semana-celda con-cita"
+                        data-fecha="${d.iso}" data-hora="${h}" disabled
+                        title="${esc(cita.cliente)} · ${e.txt} · para cambiarlo, cancela la cita"
+                        aria-label="${d.dia} ${d.num}, ${h}: cita con ${esc(cita.cliente)}">
+                        <span class="celda-cita">${esc(cita.cliente.split(' ')[0])}</span>
+                      </button>`;
+              return `<button class="semana-celda ${abierta(d.iso, h) ? 'abierto' : 'cerrado'}"
                         data-fecha="${d.iso}" data-hora="${h}" ${pasado ? 'disabled' : ''}
+                        title="${abierta(d.iso, h) ? 'Abierto — toca para cerrar' : 'Cerrado — toca para abrir'}"
                         aria-label="${d.dia} ${d.num}, ${h}"></button>`;
             }).join('')}`).join('')}
         </div>
         <p class="admin-nota" style="margin-top:1rem">
           <span class="leyenda-punto abierto"></span> Abierto para citas ·
-          <span class="leyenda-punto"></span> Cerrado ·
+          <span class="leyenda-punto cerrado"></span> Cerrado ·
+          <span class="leyenda-punto con-cita"></span> Ya tienes cita ·
           los días que ya pasaron no se pueden cambiar
         </p>
         <div id="paAgendaAviso"></div>
@@ -5000,10 +5019,18 @@ function activarAgenda() {
   $$('.semana-celda:not([disabled])').forEach((c) => c.addEventListener('click', async () => {
     const { fecha, hora } = c.dataset;
     const abrir = !c.classList.contains('abierto');
+    // Las dos clases se manejan juntas: `abierto` pinta el relleno naranja y
+    // `cerrado` dibuja la X. Alternando solo la primera, una casilla recién
+    // cerrada se quedaba sin ninguna y no mostraba la X.
+    const pintar = (estaAbierta) => {
+      c.classList.toggle('abierto', estaAbierta);
+      c.classList.toggle('cerrado', !estaAbierta);
+      c.title = estaAbierta ? 'Abierto — toca para cerrar' : 'Cerrado — toca para abrir';
+    };
     // Se pinta primero: la rejilla se toca muchas veces seguidas y esperar al
     // servidor en cada casilla la haría sentir trabada.
-    c.classList.toggle('abierto', abrir);
-    if (!(await guardarFranja(fecha, hora, abrir))) c.classList.toggle('abierto', !abrir);
+    pintar(abrir);
+    if (!(await guardarFranja(fecha, hora, abrir))) pintar(!abrir);
   }));
 
   const btn = $('#paBloquear');
