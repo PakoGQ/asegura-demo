@@ -1054,7 +1054,7 @@ function activarPerfil() {
     cont.innerHTML = dias.map((f) => {
       const libre = f.getDay() !== 6;          // sábado con agenda reducida
       return `<button class="pf-dia ${libre ? '' : 'ocupado'}"
-                ${libre ? `onclick="abrirAgendar('${f.toISOString().slice(0, 10)}')"` : 'disabled'}>
+                ${libre ? `onclick="abrirAgendar('${fechaISO(f)}')"` : 'disabled'}>
         <span class="pf-dia-sem">${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][f.getDay()]}</span>
         <span class="pf-dia-num">${f.getDate()}</span>
       </button>`;
@@ -1307,7 +1307,7 @@ async function guardPanel(rolRequerido) {
 const diasDesde = (n) => {
   const d = new Date();
   d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return fechaISO(d);   // local, no UTC: ver la nota de `hoyISO()`
 };
 
 const CITAS_DEMO = [
@@ -2008,7 +2008,7 @@ const SECCIONES_DIRECTOR = {
                       ${p.clave === (f.plan || 'beta') ? 'selected' : ''}>${p.txt}</option>`).join('')}
                   </select>
                 </td>
-                <td>${f.alta ? fechaCorta(f.alta.toISOString().slice(0, 10)) +
+                <td>${f.alta ? fechaCorta(fechaISO(f.alta)) +
                       ' ' + f.alta.getFullYear() : '—'}</td>
                 <td class="col-num">${f.facturables}</td>
                 <td class="col-num">${f.susp
