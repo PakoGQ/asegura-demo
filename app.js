@@ -2443,7 +2443,7 @@ const SECCIONES_AGENTE = {
       <p class="admin-page-sub">Esto es lo que tienes por delante</p>
       <div class="kpi-grid">
         ${kpi('fa-calendar-check', 'Próximas citas', prox.length, `${mias.filter((c) => c.estado === 'pendiente').length} por confirmar`, prox.length ? 'alerta' : '')}
-        ${kpi('fa-users', 'Clientes atendidos', YO_AGENTE.num_citas || 0, 'histórico')}
+        ${kpi('fa-calendar-check', 'Citas atendidas', YO_AGENTE.num_citas || 0, 'histórico')}
         ${kpi('fa-star', 'Tu calificación', Number(YO_AGENTE.calificacion).toFixed(1), `${resenas.length} reseñas`)}
         ${kpi('fa-comment-dots', 'Reseñas publicadas', resenas.length, 'visibles en tu perfil')}
         ${kpi('fa-clock', 'Reseñas por aprobar', porAprobar, 'las revisa tu director', porAprobar ? 'alerta' : '')}
@@ -2580,7 +2580,11 @@ const SECCIONES_AGENTE = {
         <button class="tab-btn" data-tab="redes"><i class="fas fa-share-nodes"></i> Redes</button>
       </div>
       <div class="tab-panel activo" id="tab-perfilFotos">
-        <p class="admin-nota">Estas fotos salen en tu perfil público.</p>
+        <p class="admin-nota"><i class="fas fa-triangle-exclamation"></i>
+          <b>Estas fotos son provisionales, de un banco de imágenes, y son las
+          mismas para todo el equipo.</b> Salen en tu perfil público mientras no
+          haya fotos tuyas. La subida todavía no está lista; en cuanto lo esté,
+          las tuyas las reemplazan.</p>
         <div class="contenido-grid">
           <img src="${esc(YO_AGENTE.foto)}" alt="" />
           ${FOTOS_APOYO.map((u) => `<img src="${esc(u)}" alt="" />`).join('')}
