@@ -8659,3 +8659,21 @@ a.panel-marca:hover .logo-img { opacity: .82; transition: var(--transition); }
 
 /* Botón de acceso cuando ya hay sesión: deja de ofrecer entrar y ofrece volver. */
 .login-key.con-sesion { color: var(--acento); }
+
+/* ── Agenda semanal del agente ── */
+.semana-nav { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.semana-titulo { font-size: .92rem; }
+.semana-cab.es-hoy { color: var(--acento); font-weight: 700; }
+.semana-num { display: block; font-size: .7rem; font-weight: 400; color: var(--t3); }
+.semana-cab.es-hoy .semana-num { color: var(--acento); }
+.semana-celda[disabled] { opacity: .3; cursor: not-allowed; }
+
+/* En móvil los rótulos «Semana anterior / Siguiente» empujan el título de la
+   semana a dos líneas. Se dejan solo las flechas: la fecha de en medio ya dice
+   dónde estás parado. */
+@media (max-width: 560px) {
+  .semana-nav .btn span,
+  .semana-nav .btn { font-size: .8rem; }
+  .semana-nav .btn .rotulo { display: none; }
+  .semana-titulo { text-align: center; flex: 1; }
+}

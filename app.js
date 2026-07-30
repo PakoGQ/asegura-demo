@@ -74,6 +74,21 @@ function togglePassword(btn) {
   icono.className = oculto ? 'fas fa-eye-slash' : 'fas fa-eye';
 }
 
+/* La fecha de HOY en la zona del usuario.
+
+   `new Date().toISOString()` convierte a UTC primero: en México (UTC-6) toda
+   hora a partir de las 18:00 devuelve el día siguiente. Con eso, «Citas de hoy»
+   mostraba las de mañana y la rejilla de disponibilidad deshabilitaba el día en
+   curso por creerlo pasado. Se comprobó a las 18:13 del 29-jul: toISOString
+   decía 2026-07-30.
+
+   Todo lo que compare contra un `date` de Postgres —que no tiene zona— tiene
+   que pasar por aquí. */
+function fechaISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const hoyISO = () => fechaISO(new Date());
+
 const waLink = (tel, texto) => {
   if (!tel) return null;
   const num = String(tel).replace(/\D/g, '');
@@ -1045,7 +1060,7 @@ function navFullscreen(d) {
 /* ── Agendar ── */
 function abrirAgendar(fecha) {
   const a = PERFIL;
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyISO();
   const ramos = (a.ramos || []).map((r) =>
     `<option value="${r}">${esc((RAMOS[r] || {}).label || r)}</option>`).join('');
   const modos = (a.modalidades || []).map((m) =>
@@ -1340,7 +1355,7 @@ async function cargarDatosDirector(sesion) {
 
 const agentePorSlug = (slug) => AGENTES.find((a) => a.slug === slug) || {};
 const citasDeEquipo = () => CITAS.map((c) => ({ ...c, ag: agentePorSlug(c.agente) }));
-const esHoy = (f) => f === new Date().toISOString().slice(0, 10);
+const esHoy = (f) => f === hoyISO();
 
 /* ── Gráficas del panel ─────────────────────────────────────────────────────
    A diferencia del proyecto de referencia, donde las cuatro gráficas son
@@ -1618,7 +1633,7 @@ const SECCIONES_DIRECTOR = {
       <section class="admin-card">
         <h2>Próximas citas del equipo</h2>
         <ul class="lista-citas">
-          ${citas.filter((c) => c.fecha >= new Date().toISOString().slice(0, 10))
+          ${citas.filter((c) => c.fecha >= hoyISO())
                  .sort((a, b) => a.fecha.localeCompare(b.fecha))
                  .slice(0, 6).map(filaCita).join('')}
         </ul>
@@ -2129,7 +2144,7 @@ function activarGestionAgentes() {
     const activando = accion === 'ocultar' ? !ag.hidden : !ag.suspended;
     const parche = accion === 'ocultar'
       ? { hidden: activando }
-      : { suspended: activando, suspended_from: activando ? new Date().toISOString().slice(0, 10) : null };
+      : { suspended: activando, suspended_from: activando ? hoyISO() : null };
 
     b.disabled = true;
     try {
@@ -2218,7 +2233,10 @@ async function initPanelAgente() {
   if (!sesion) return;
 
   YO_AGENTE = await identificarAgente(sesion);
+  MI_USUARIO = sesion.usuario;
   DISPONIBLE = !!YO_AGENTE.disponible;
+
+  await Promise.all([cargarDatosAgente(sesion), cargarCorreoAcceso()]);
 
   $('#paQuien').innerHTML = `<b>${esc(YO_AGENTE.nombre)}</b>${sesion.demo ? ' · demo' : ''}`;
   $('#paVerPerfil').href = `perfil.html?a=${encodeURIComponent(YO_AGENTE.slug)}`;
@@ -2237,35 +2255,43 @@ async function initPanelAgente() {
     <div class="mini-progreso"><div style="width:${pct}%"></div></div>
     <small>${pct}% del perfil completo</small>`;
 
-  const misCitas = () => CITAS_DEMO.filter((c) => c.agente === YO_AGENTE.slug);
-  const porConfirmar = misCitas().filter((c) => c.estado === 'pendiente').length;
-  if (porConfirmar) $('#paBadgeCitas').textContent = porConfirmar;
+  const porConfirmar = misCitasDeHoy().filter((c) => c.estado === 'pendiente').length;
+  $('#paBadgeCitas').textContent = porConfirmar || '';
 
   pintarToggle();
   [$('#paToggle'), $('#paToggleMovil')].forEach((b) =>
-    b && b.addEventListener('click', () => {
+    b && b.addEventListener('click', async () => {
+      // Se pinta primero para que responda al instante; si la base rechaza el
+      // cambio se regresa, en vez de mostrar un estado que no es cierto.
+      const antes = DISPONIBLE;
       DISPONIBLE = !DISPONIBLE;
       pintarToggle();
-      showToast(DISPONIBLE
-        ? 'Ahora apareces como disponible en el directorio.'
-        : 'Ya no apareces como disponible. Tu perfil sigue publicado.');
+      if (await guardarDisponible(DISPONIBLE)) {
+        showToast(DISPONIBLE
+          ? 'Ahora apareces como disponible en el directorio.'
+          : 'Ya no apareces como disponible. Tu perfil sigue publicado.');
+      } else {
+        DISPONIBLE = antes;
+        pintarToggle();
+      }
     }));
 
   const ir = (sec) => {
     $$('.admin-nav-item[data-sec], .panel-bottom-nav-item[data-sec]')
       .forEach((b) => b.classList.toggle('activo', b.dataset.sec === sec));
     main.innerHTML = (SECCIONES_AGENTE[sec] || (() => '<p>Sección en construcción.</p>'))();
-    if (sec === 'agenda') activarSemana();
-    if (sec === 'citas') activarTabsCitas();
+    main.scrollTop = 0;
+
+    // Enganchar lo que ya está pintado…
+    activarPanelAgente(sec);
     if (sec === 'contenido') activarTabsCitas();
-    if (sec === 'cartera') entrarACartera(() => { main.innerHTML = seccionCartera(false); });
-    if (sec === 'clientes') {
-      if (CLIENTES.cargado) activarClientes();
-      else cargarClientes().then(repintarClientes);
-    }
-    if (sec === 'actividad') {
-      if (ACTIVIDAD.cargado) activarActividad();
-      else cargarActividad().then(() => { main.innerHTML = seccionActividad(); activarActividad(); });
+
+    // …y traer lo que aún no se ha cargado. Cada sección se pide una sola vez;
+    // al volver, ya está en memoria y solo se reenganchan los eventos.
+    if (sec === 'cartera') entrarACartera(() => { main.innerHTML = seccionCartera(false); activarTabsCartera(); });
+    if (sec === 'clientes'  && !CLIENTES.cargado)  cargarClientes().then(repintarClientes);
+    if (sec === 'actividad' && !ACTIVIDAD.cargado) {
+      cargarActividad().then(() => { main.innerHTML = seccionActividad(); activarActividad(); });
     }
   };
 
@@ -2301,9 +2327,17 @@ function pintarToggle() {
 const SECCIONES_AGENTE = {
 
   inicio() {
-    const mias = CITAS_DEMO.filter((c) => c.agente === YO_AGENTE.slug);
-    const prox = mias.filter((c) => c.fecha >= new Date().toISOString().slice(0, 10));
-    const resenas = RESENAS_DEMO[YO_AGENTE.slug] || [];
+    const mias = misCitasDeHoy();
+    const prox = mias.filter((c) => c.fecha >= hoyISO());
+    // Reseñas propias de la base; sin conexión, el respaldo demo.
+    const todas = DATOS_REALES_AGENTE ? MIS_RESENAS
+      : (RESENAS_DEMO[YO_AGENTE.slug] || []).map((r) => ({ ...r, aprobada: true }));
+    const resenas = todas.filter((r) => r.aprobada);
+    const porAprobar = todas.filter((r) => !r.aprobada && !r.rechazada).length;
+    const mes = new Date().toISOString().slice(0, 7);
+    const polizasMes = CARTERA.cargado
+      ? CARTERA.polizas.filter((p) => String(p.fecha_inicio || '').slice(0, 7) === mes).length
+      : null;
     return `
       <h1 class="admin-page-title">Hola, ${esc(YO_AGENTE.nombre.split(' ')[0])}</h1>
       <p class="admin-page-sub">Esto es lo que tienes por delante</p>
@@ -2311,9 +2345,10 @@ const SECCIONES_AGENTE = {
         ${kpi('fa-calendar-check', 'Próximas citas', prox.length, `${mias.filter((c) => c.estado === 'pendiente').length} por confirmar`, prox.length ? 'alerta' : '')}
         ${kpi('fa-users', 'Clientes atendidos', YO_AGENTE.num_citas || 0, 'histórico')}
         ${kpi('fa-star', 'Tu calificación', Number(YO_AGENTE.calificacion).toFixed(1), `${resenas.length} reseñas`)}
-        ${kpi('fa-eye', 'Visitas a tu perfil', 214, 'últimos 30 días')}
-        ${kpi('fa-comment-dots', 'Reseñas nuevas', 1, 'esperando aprobación')}
-        ${kpi('fa-file-contract', 'Pólizas del mes', 6, 'colocadas')}
+        ${kpi('fa-comment-dots', 'Reseñas publicadas', resenas.length, 'visibles en tu perfil')}
+        ${kpi('fa-clock', 'Reseñas por aprobar', porAprobar, 'las revisa tu director', porAprobar ? 'alerta' : '')}
+        ${kpi('fa-file-contract', 'Pólizas del mes', polizasMes === null ? '—' : polizasMes,
+              polizasMes === null ? 'abre Mi cartera para calcularlo' : 'con fecha de inicio este mes')}
       </div>
       <section class="admin-card">
         <h2>Tus próximas citas</h2>
@@ -2332,8 +2367,8 @@ const SECCIONES_AGENTE = {
   },
 
   citas() {
-    const mias = CITAS_DEMO.filter((c) => c.agente === YO_AGENTE.slug);
-    const hoy = new Date().toISOString().slice(0, 10);
+    const mias = misCitasDeHoy();
+    const hoy = hoyISO();
     const grupo = {
       prox: mias.filter((c) => c.fecha >= hoy && c.estado !== 'pendiente'),
       conf: mias.filter((c) => c.estado === 'pendiente'),
@@ -2354,37 +2389,63 @@ const SECCIONES_AGENTE = {
   },
 
   agenda() {
-    const horas = ['09:00', '10:00', '11:00', '12:00', '13:00', '16:00', '17:00', '18:00'];
-    const dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    // La rejilla mostraba «Lun–Sáb» en abstracto, pero `disponibilidad` guarda
+    // FECHAS concretas (fecha + hora_ini). Eran dos cosas distintas y por eso
+    // nada se podía guardar. Ahora la rejilla ES la semana real: cada casilla
+    // corresponde exactamente a una fila de la tabla.
+    const horas = HORAS_AGENDA;
+    const dias = diasDeLaSemana(SEMANA_OFFSET);
+    const hoy = hoyISO();
+    const abierta = (fecha, hora) => {
+      const f = MI_AGENDA.find((d) => d.fecha === fecha && String(d.hora_ini).slice(0, 5) === hora);
+      return f ? f.disponible : false;
+    };
+
     return `
       <h1 class="admin-page-title">Disponibilidad</h1>
       <p class="admin-page-sub">Toca una casilla para abrir o cerrar ese horario</p>
+
+      <div class="admin-acciones-top semana-nav">
+        <button class="btn btn-ghost btn-sm" data-semana="-1" ${SEMANA_OFFSET <= 0 ? 'disabled' : ''}>
+          <i class="fas fa-chevron-left"></i> <span class="rotulo">Semana anterior</span>
+        </button>
+        <b class="semana-titulo">${rotuloSemana(dias)}</b>
+        <button class="btn btn-ghost btn-sm" data-semana="1">
+          <span class="rotulo">Siguiente</span> <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+
       <section class="admin-card">
         <div class="semana-grid" style="grid-template-columns: 60px repeat(${dias.length}, 1fr)">
           <div></div>
-          ${dias.map((d) => `<div class="semana-cab">${d}</div>`).join('')}
+          ${dias.map((d) => `<div class="semana-cab ${d.iso === hoy ? 'es-hoy' : ''}">
+              ${d.dia}<span class="semana-num">${d.num}</span></div>`).join('')}
           ${horas.map((h) => `
             <div class="semana-hora">${h}</div>
-            ${dias.map((d, i) => {
-              const abierto = !(d === 'Sáb' && Number(h.slice(0, 2)) > 13);
-              return `<button class="semana-celda ${abierto ? 'abierto' : ''}"
-                        data-dia="${d}" data-hora="${h}"
-                        aria-label="${d} ${h}"></button>`;
+            ${dias.map((d) => {
+              const pasado = d.iso < hoy;
+              return `<button class="semana-celda ${abierta(d.iso, h) ? 'abierto' : ''}"
+                        data-fecha="${d.iso}" data-hora="${h}" ${pasado ? 'disabled' : ''}
+                        aria-label="${d.dia} ${d.num}, ${h}"></button>`;
             }).join('')}`).join('')}
         </div>
         <p class="admin-nota" style="margin-top:1rem">
           <span class="leyenda-punto abierto"></span> Abierto para citas ·
-          <span class="leyenda-punto"></span> Cerrado
+          <span class="leyenda-punto"></span> Cerrado ·
+          los días que ya pasaron no se pueden cambiar
         </p>
+        <div id="paAgendaAviso"></div>
       </section>
+
       <section class="admin-card">
-        <h2>Bloquear días completos</h2>
+        <h2>Bloquear un día completo</h2>
         <p class="admin-vacio" style="text-align:left">
-          Vacaciones, capacitación o cualquier día que no puedas atender.
+          Vacaciones, capacitación o cualquier día que no puedas atender. Cierra
+          todos los horarios de ese día de una vez.
         </p>
         <div class="acciones">
-          <input class="form-input" type="date" id="paBloqueo" style="max-width:200px" />
-          <button class="btn btn-acento btn-sm" onclick="showToast('En demo no se guarda el bloqueo.')">
+          <input class="form-input" type="date" id="paBloqueo" min="${hoy}" style="max-width:200px" />
+          <button class="btn btn-acento btn-sm" id="paBloquear">
             <i class="fas fa-ban"></i> Bloquear
           </button>
         </div>
@@ -2404,7 +2465,7 @@ const SECCIONES_AGENTE = {
         <div class="contenido-grid">
           <img src="${esc(YO_AGENTE.foto)}" alt="" />
           ${FOTOS_APOYO.map((u) => `<img src="${esc(u)}" alt="" />`).join('')}
-          <button class="subir-foto" onclick="showToast('En demo no se suben fotos.')">
+          <button class="subir-foto" onclick="showToast('La subida de fotos todavía no está lista. Por ahora pídele a tu director que las cargue.')">
             <i class="fas fa-plus"></i><span>Subir</span>
           </button>
         </div>
@@ -2415,7 +2476,7 @@ const SECCIONES_AGENTE = {
           No sale en tu perfil.
         </p>
         <div class="contenido-grid">
-          <button class="subir-foto" onclick="showToast('En demo no se suben fotos.')">
+          <button class="subir-foto" onclick="showToast('La subida de fotos todavía no está lista. Por ahora pídele a tu director que las cargue.')">
             <i class="fas fa-plus"></i><span>Subir</span>
           </button>
         </div>
@@ -2428,7 +2489,7 @@ const SECCIONES_AGENTE = {
       const tiene = (YO_AGENTE.ramos || []).includes(k);
       const esp = (YO_AGENTE.especialidades || []).includes(k);
       return `<label class="check-ramo ${tiene ? 'activo' : ''}">
-        <input type="checkbox" ${tiene ? 'checked' : ''} />
+        <input type="checkbox" data-ramo="${k}" ${tiene ? 'checked' : ''} />
         <i class="fas ${v.icono}"></i> ${esc(v.label)}
         ${esp ? '<span class="pill pill-acento pill-sm">Especialidad</span>' : ''}
       </label>`;
@@ -2437,7 +2498,7 @@ const SECCIONES_AGENTE = {
     const modos = Object.entries(MODALIDADES).map(([k, v]) => {
       const tiene = (YO_AGENTE.modalidades || []).includes(k);
       return `<label class="check-ramo ${tiene ? 'activo' : ''}">
-        <input type="checkbox" ${tiene ? 'checked' : ''} />
+        <input type="checkbox" data-modalidad="${k}" ${tiene ? 'checked' : ''} />
         <i class="fas ${v.icono}"></i> ${esc(v.label)}
       </label>`;
     }).join('');
@@ -2466,21 +2527,21 @@ const SECCIONES_AGENTE = {
       <section class="admin-card">
         <h2>Tu presentación</h2>
         <div class="form-group">
-          <label class="form-label">Titular</label>
-          <input class="form-input" value="${esc(YO_AGENTE.titulo || '')}" />
+          <label class="form-label" for="pfTitulo">Titular</label>
+          <input class="form-input" id="pfTitulo" value="${esc(YO_AGENTE.titulo || '')}" />
         </div>
         <div class="form-group">
-          <label class="form-label">Sobre ti</label>
-          <textarea class="form-input" rows="4">${esc(YO_AGENTE.descripcion || '')}</textarea>
+          <label class="form-label" for="pfDesc">Sobre ti</label>
+          <textarea class="form-input" id="pfDesc" rows="4">${esc(YO_AGENTE.descripcion || '')}</textarea>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Zona</label>
-            <input class="form-input" value="${esc(YO_AGENTE.zona || '')}" />
+            <label class="form-label" for="pfZona">Zona</label>
+            <input class="form-input" id="pfZona" value="${esc(YO_AGENTE.zona || '')}" />
           </div>
           <div class="form-group">
-            <label class="form-label">WhatsApp</label>
-            <input class="form-input" value="+${esc(YO_AGENTE.whatsapp || '')}" />
+            <label class="form-label" for="pfWa">WhatsApp</label>
+            <input class="form-input" id="pfWa" value="+${esc(YO_AGENTE.whatsapp || '')}" />
           </div>
         </div>
       </section>
@@ -2495,9 +2556,10 @@ const SECCIONES_AGENTE = {
         <div class="check-grid">${modos}</div>
       </section>
 
-      <button class="btn btn-acento btn-lg" onclick="showToast('En modo demostración no se guarda.')">
+      <button class="btn btn-acento btn-lg" id="paGuardarPerfil">
         <i class="fas fa-floppy-disk"></i> Guardar cambios
-      </button>`;
+      </button>
+      <div id="paPerfilAviso"></div>`;
   },
 
   // El agente ve solo lo suyo: el RLS ya filtra las dos vistas, así que la
@@ -2548,12 +2610,19 @@ function filaCitaAgente(c) {
         </span>
         ${c.mensaje ? `<span class="cita-msg">“${esc(c.mensaje)}”</span>` : ''}
         <div class="acciones" style="margin-top:.5rem">
-          ${c.estado === 'pendiente'
-            ? `<button class="btn btn-acento btn-sm" onclick="showToast('Cita confirmada. En demo no se guarda.')">
-                 <i class="fas fa-check"></i> Confirmar</button>` : ''}
+          ${c.estado === 'pendiente' ? `
+            <button class="btn btn-acento btn-sm" data-cita-id="${esc(c.id)}" data-cita-estado="confirmada">
+              <i class="fas fa-check"></i> Confirmar</button>
+            <button class="btn btn-ghost btn-sm" data-cita-id="${esc(c.id)}" data-cita-estado="cancelada">
+              <i class="fas fa-xmark"></i> Cancelar</button>` : ''}
+          ${c.estado === 'confirmada' ? `
+            <button class="btn btn-acento btn-sm" data-cita-id="${esc(c.id)}" data-cita-estado="completada">
+              <i class="fas fa-circle-check"></i> Ya la atendí</button>
+            <button class="btn btn-ghost btn-sm" data-cita-id="${esc(c.id)}" data-cita-estado="no_asistio">
+              <i class="fas fa-user-slash"></i> No llegó</button>` : ''}
           <a class="btn btn-wa btn-sm" href="${esc(waLink(c.wa, `Hola ${c.cliente}, te escribo por tu cita.`))}"
              target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> Escribir</a>
-          <button class="btn btn-ghost btn-sm" onclick="abrirResenaCliente('${esc(c.cliente)}')">
+          <button class="btn btn-ghost btn-sm" onclick="abrirResenaCliente('${esc(c.cliente)}', '${esc(c.wa || '')}')">
             <i class="fas fa-user-pen"></i> Nota del cliente
           </button>
         </div>
@@ -2569,15 +2638,9 @@ function activarTabsCitas() {
   }));
 }
 
-function activarSemana() {
-  $$('.semana-celda').forEach((c) => c.addEventListener('click', () => {
-    c.classList.toggle('abierto');
-  }));
-}
-
 /* Reseña de cliente — privada entre el equipo y el Director (tabla
    `resenas_clientes`). Nunca se muestra en el sitio público. */
-function abrirResenaCliente(cliente) {
+function abrirResenaCliente(cliente, wa) {
   const tipos = [
     { k: 'bueno',   label: 'Buen cliente', icono: 'fa-face-smile',
       tags: ['Puntual', 'Claro con lo que quiere', 'Contrató', 'Recomendaría'] },
@@ -2596,9 +2659,17 @@ function abrirResenaCliente(cliente) {
       La ven tus compañeros y tu director, para saber a qué atenerse.
       El cliente nunca la ve.
     </p>
-    <div class="form-group">
-      <label class="form-label">Cliente</label>
-      <input class="form-input" id="rcCliente" value="${esc(cliente || '')}" placeholder="Nombre o WhatsApp" />
+    <div class="imp-mapeo">
+      <div class="form-group">
+        <label class="form-label" for="rcCliente">Cliente</label>
+        <input class="form-input" id="rcCliente" value="${esc(cliente || '')}" placeholder="Nombre" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="rcWa">WhatsApp *</label>
+        <input class="form-input" id="rcWa" value="${esc(wa || '')}" placeholder="+52..." />
+        <p class="modal-texto imp-nota">Es con lo que el equipo lo reconoce si
+          vuelve a aparecer; el nombre se escribe de muchas formas.</p>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">¿Cómo te fue?</label>
@@ -2614,12 +2685,13 @@ function abrirResenaCliente(cliente) {
       <div class="rc-tags" id="rcTags"></div>
     </div>
     <div class="form-group">
-      <label class="form-label">Nota (opcional)</label>
-      <textarea class="form-input" rows="2" placeholder="Algo que le sirva al equipo…"></textarea>
+      <label class="form-label" for="rcNota">Nota (opcional)</label>
+      <textarea class="form-input" id="rcNota" rows="2" placeholder="Algo que le sirva al equipo…"></textarea>
     </div>
-    <button class="btn btn-acento w-full" onclick="closeModal('clienteModal');showToast('Nota guardada. En demo no persiste.')">
+    <button class="btn btn-acento w-full" id="rcGuardar">
       <i class="fas fa-floppy-disk"></i> Guardar nota
-    </button>`;
+    </button>
+    <div id="rcAviso"></div>`;
 
   const pintarTags = (k) => {
     const t = tipos.find((x) => x.k === k);
@@ -2634,7 +2706,40 @@ function abrirResenaCliente(cliente) {
   }));
 
   pintarTags('bueno');
+  $('#rcGuardar').addEventListener('click', guardarResenaCliente);
   openModal('clienteModal');
+}
+
+async function guardarResenaCliente() {
+  const aviso = $('#rcAviso');
+  const wa = $('#rcWa').value.replace(/[^\d+]/g, '');
+  const nombre = $('#rcCliente').value.trim();
+  const tipo = ($('.rc-tipo.activo') || {}).dataset ? $('.rc-tipo.activo').dataset.tipo : 'bueno';
+  const tags = $$('.rc-tag.activo').map((b) => b.textContent.trim());
+
+  if (!wa) { aviso.innerHTML = '<p class="imp-error">Falta el WhatsApp: es la llave con la que el equipo lo reconoce.</p>'; return; }
+  if (!window.sbClient || !DATOS_REALES_AGENTE || !YO_AGENTE || !YO_AGENTE.id) {
+    aviso.innerHTML = '<p class="imp-error">En modo demostración no se guarda.</p>'; return;
+  }
+
+  const btn = $('#rcGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
+  try {
+    // La tabla no tiene columna de nombre —se cruza por WhatsApp— así que el
+    // nombre se antepone a la nota para que el equipo sepa de quién habla.
+    const notas = [nombre, $('#rcNota').value.trim()].filter(Boolean).join(' — ');
+    const { error } = await sbClient.from('resenas_clientes').insert({
+      agente_id: YO_AGENTE.id, cliente_whatsapp: wa, tipo, tags, notas: notas || null,
+    });
+    if (error) throw error;
+    closeModal('clienteModal');
+    showToast('Nota guardada. La ve tu equipo y tu director.');
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Guardar nota';
+    aviso.innerHTML = `<p class="imp-error">No se pudo guardar: ${esc(e.message || 'error')}</p>`;
+  }
 }
 
 /* ===========================================================================
@@ -4591,4 +4696,277 @@ async function reflejarSesionEnPublico() {
     // Sin sesión legible se deja el botón como estaba: pedir acceso.
     console.warn('No se pudo leer la sesión:', e.message);
   }
+}
+
+/* ===========================================================================
+   27. Panel del Agente — datos reales
+
+   Mismo trabajo que se hizo del lado del Director: el panel leía `CITAS_DEMO`,
+   un arreglo escrito a mano, y ningún formulario guardaba. El RLS ya filtra
+   todo a lo propio, así que ninguna consulta necesita pasar el id del agente.
+   =========================================================================== */
+
+let MIS_CITAS = [];
+let MI_AGENDA = [];
+let MIS_RESENAS = [];
+let DATOS_REALES_AGENTE = false;
+
+async function cargarDatosAgente(sesion) {
+  if (!window.sbClient || (sesion && sesion.demo) || !YO_AGENTE || !YO_AGENTE.id) return;
+  const desde = hoyISO();
+  try {
+    const [citas, disp, resenas] = await Promise.all([
+      sbClient.from('citas')
+        .select('id, cliente_nombre, cliente_whatsapp, modalidad, lugar, ramo_interes, fecha, hora, estado, notas')
+        .order('fecha', { ascending: false }),
+      sbClient.from('disponibilidad')
+        .select('id, fecha, hora_ini, disponible')
+        .gte('fecha', desde),
+      // El RLS deja al agente ver las de su equipo; se filtran a las suyas.
+      sbClient.from('resenas')
+        .select('id, agente_id, autor, calificacion, texto, aprobada, rechazada, created_at')
+        .eq('agente_id', YO_AGENTE.id)
+        .order('created_at', { ascending: false }),
+    ]);
+    if (citas.error)   throw citas.error;
+    if (disp.error)    throw disp.error;
+    if (resenas.error) throw resenas.error;
+
+    MIS_CITAS = (citas.data || []).map((c) => ({
+      id: c.id, cliente: c.cliente_nombre, wa: c.cliente_whatsapp,
+      modalidad: c.modalidad, lugar: c.lugar, ramo: c.ramo_interes,
+      fecha: String(c.fecha).slice(0, 10), hora: String(c.hora || '').slice(0, 5),
+      estado: c.estado, mensaje: c.notas || '',
+      agente: YO_AGENTE.slug,
+    }));
+    MI_AGENDA = disp.data || [];
+    MIS_RESENAS = resenas.data || [];
+    DATOS_REALES_AGENTE = true;
+  } catch (e) {
+    console.warn('No se pudo leer la agenda del agente:', e.message);
+  }
+}
+
+/* Con base conectada, lo real; sin ella, el respaldo demo para poder navegar. */
+const misCitasDeHoy = () => DATOS_REALES_AGENTE
+  ? MIS_CITAS
+  : CITAS_DEMO.filter((c) => c.agente === (YO_AGENTE || {}).slug);
+
+/* ── Confirmar y cancelar ────────────────────────────────────────────────── */
+async function cambiarEstadoCita(id, estado, boton) {
+  if (!window.sbClient || !DATOS_REALES_AGENTE) { showToast('En modo demostración no se guarda.'); return; }
+  const fila = boton.closest('.cita-item, li');
+  boton.disabled = true;
+  try {
+    const { error } = await sbClient.from('citas').update({ estado }).eq('id', id);
+    if (error) throw error;
+    const c = MIS_CITAS.find((x) => x.id === id);
+    if (c) c.estado = estado;
+    const main = $('#paMain');
+    if (main) { main.innerHTML = SECCIONES_AGENTE.citas(); activarPanelAgente('citas'); }
+    showToast({
+      confirmada: 'Cita confirmada. El cliente ya cuenta contigo.',
+      cancelada:  'Cita cancelada.',
+      completada: 'Marcada como atendida.',
+      no_asistio: 'Marcada como que no llegó.',
+    }[estado] || 'Actualizada.');
+  } catch (e) {
+    boton.disabled = false;
+    if (fila) fila.style.opacity = '1';
+    showToast('No se pudo guardar: ' + (e.message || 'error'));
+  }
+}
+
+/* ── Toggle de disponibilidad ────────────────────────────────────────────── */
+async function guardarDisponible(valor) {
+  if (!window.sbClient || !YO_AGENTE || !YO_AGENTE.id || !DATOS_REALES_AGENTE) return true;
+  try {
+    // `disponible` no está en la lista de campos protegidos del trigger, así
+    // que el agente sí puede moverlo — es justo lo que más toca en el día.
+    const { error } = await sbClient.from('agentes')
+      .update({ disponible: valor }).eq('id', YO_AGENTE.id);
+    if (error) throw error;
+    YO_AGENTE.disponible = valor;
+    return true;
+  } catch (e) {
+    showToast('No se pudo cambiar tu disponibilidad: ' + (e.message || 'error'));
+    return false;
+  }
+}
+
+/* ── Agenda semanal ──────────────────────────────────────────────────────── */
+const HORAS_AGENDA = ['09:00', '10:00', '11:00', '12:00', '13:00', '16:00', '17:00', '18:00'];
+let SEMANA_OFFSET = 0;   // 0 = esta semana
+
+/* Lunes a sábado de la semana pedida. El domingo se deja fuera a propósito:
+   no aparecía en la rejilla original y nadie pidió abrirlo. */
+function diasDeLaSemana(offset) {
+  const hoy = new Date();
+  const lunes = new Date(hoy);
+  // getDay(): 0 es domingo. Se recula al lunes de esta semana.
+  lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7) + offset * 7);
+  const nombres = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  return nombres.map((dia, i) => {
+    const d = new Date(lunes);
+    d.setDate(lunes.getDate() + i);
+    return { dia, num: d.getDate(), iso: fechaISO(d) };
+  });
+}
+
+function rotuloSemana(dias) {
+  const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const a = new Date(dias[0].iso + 'T00:00:00');
+  const b = new Date(dias[dias.length - 1].iso + 'T00:00:00');
+  return a.getMonth() === b.getMonth()
+    ? `${a.getDate()} – ${b.getDate()} de ${MES[a.getMonth()]}`
+    : `${a.getDate()} ${MES[a.getMonth()]} – ${b.getDate()} ${MES[b.getMonth()]}`;
+}
+
+function activarAgenda() {
+  const repintar = () => {
+    const main = $('#paMain');
+    if (!main) return;
+    main.innerHTML = SECCIONES_AGENTE.agenda();
+    activarAgenda();
+  };
+
+  $$('[data-semana]').forEach((b) => b.addEventListener('click', () => {
+    SEMANA_OFFSET = Math.max(0, SEMANA_OFFSET + Number(b.dataset.semana));
+    repintar();
+  }));
+
+  $$('.semana-celda:not([disabled])').forEach((c) => c.addEventListener('click', async () => {
+    const { fecha, hora } = c.dataset;
+    const abrir = !c.classList.contains('abierto');
+    // Se pinta primero: la rejilla se toca muchas veces seguidas y esperar al
+    // servidor en cada casilla la haría sentir trabada.
+    c.classList.toggle('abierto', abrir);
+    if (!(await guardarFranja(fecha, hora, abrir))) c.classList.toggle('abierto', !abrir);
+  }));
+
+  const btn = $('#paBloquear');
+  if (btn) btn.addEventListener('click', async () => {
+    const aviso = $('#paAgendaAviso');
+    const fecha = $('#paBloqueo').value;
+    if (!fecha) { showToast('Elige la fecha que quieres bloquear.'); return; }
+    btn.disabled = true;
+    const ok = await Promise.all(HORAS_AGENDA.map((h) => guardarFranja(fecha, h, false)));
+    btn.disabled = false;
+    if (ok.every(Boolean)) {
+      showToast('Día bloqueado. No vas a recibir citas ese día.');
+      repintar();
+    } else if (aviso) {
+      aviso.innerHTML = '<p class="imp-error">Algunos horarios no se pudieron cerrar.</p>';
+    }
+  });
+}
+
+/* Un upsert por franja. La tabla tiene unique(agente_id, fecha, hora_ini), que
+   es justo la llave de conflicto: tocar dos veces la misma casilla actualiza
+   la fila en vez de crear una segunda. */
+async function guardarFranja(fecha, hora, disponible) {
+  if (!window.sbClient || !DATOS_REALES_AGENTE || !YO_AGENTE || !YO_AGENTE.id) {
+    showToast('En modo demostración no se guarda.');
+    return false;
+  }
+  try {
+    const { error } = await sbClient.from('disponibilidad').upsert({
+      agente_id: YO_AGENTE.id, fecha, hora_ini: hora,
+      hora_fin: sumarUnaHora(hora), disponible,
+    }, { onConflict: 'agente_id,fecha,hora_ini' });
+    if (error) throw error;
+    const i = MI_AGENDA.findIndex((d) => d.fecha === fecha && String(d.hora_ini).slice(0, 5) === hora);
+    if (i >= 0) MI_AGENDA[i].disponible = disponible;
+    else MI_AGENDA.push({ fecha, hora_ini: hora, disponible });
+    return true;
+  } catch (e) {
+    showToast('No se pudo guardar ese horario: ' + (e.message || 'error'));
+    return false;
+  }
+}
+
+/* `hora_fin > hora_ini` es un CHECK de la tabla, así que no puede quedar igual. */
+const sumarUnaHora = (h) => String(Number(h.slice(0, 2)) + 1).padStart(2, '0') + ':' + h.slice(3);
+
+/* ── Guardar el perfil ───────────────────────────────────────────────────────
+   El trigger `trg_agente_campos_protegidos` revierte nombre, cédula, estado y
+   plan aunque se manden. Eso está bien y no hay que rodearlo: por eso esos
+   campos salen en pantalla como solo lectura y ni siquiera se envían.        */
+function activarPerfilAgente() {
+  const btn = $('#paGuardarPerfil');
+  if (!btn) return;
+
+  // El check pinta su etiqueta; sin esto el recuadro no cambia hasta repintar.
+  $$('.check-ramo input').forEach((i) => i.addEventListener('change', () =>
+    i.closest('.check-ramo').classList.toggle('activo', i.checked)));
+
+  btn.addEventListener('click', async () => {
+    const aviso = $('#paPerfilAviso');
+    if (!window.sbClient || !DATOS_REALES_AGENTE || !YO_AGENTE || !YO_AGENTE.id) {
+      aviso.innerHTML = '<p class="imp-error">En modo demostración no se guarda.</p>';
+      return;
+    }
+    const ramos = $$('.check-ramo input[data-ramo]:checked').map((i) => i.dataset.ramo);
+    const modalidades = $$('.check-ramo input[data-modalidad]:checked').map((i) => i.dataset.modalidad);
+    if (!ramos.length) {
+      aviso.innerHTML = '<p class="imp-error">Elige al menos un ramo, o no vas a aparecer en ninguna búsqueda.</p>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
+    aviso.innerHTML = '';
+    try {
+      const parche = {
+        titulo: $('#pfTitulo').value.trim() || null,
+        descripcion: $('#pfDesc').value.trim() || null,
+        zona: $('#pfZona').value.trim() || null,
+        whatsapp: $('#pfWa').value.replace(/[^\d+]/g, '') || null,
+        modalidades,
+      };
+      const { error } = await sbClient.from('agentes').update(parche).eq('id', YO_AGENTE.id);
+      if (error) throw error;
+
+      // Los ramos viven en su propia tabla. Se reemplazan en bloque: calcular
+      // altas y bajas por separado no aporta nada y deja más formas de fallar.
+      const { error: eDel } = await sbClient.from('ramos_agente').delete().eq('agente_id', YO_AGENTE.id);
+      if (eDel) throw eDel;
+      if (ramos.length) {
+        const { error: eIns } = await sbClient.from('ramos_agente')
+          .insert(ramos.map((r) => ({ agente_id: YO_AGENTE.id, ramo: r })));
+        if (eIns) throw eIns;
+      }
+
+      Object.assign(YO_AGENTE, parche, { ramos });
+      await cargarAgentes();
+      aviso.innerHTML = `<p class="imp-ok"><i class="fas fa-circle-check"></i>
+        Guardado. Así te va a ver quien entre a
+        <a href="perfil.html?a=${esc(YO_AGENTE.slug)}" target="_blank" rel="noopener">tu perfil</a>.</p>`;
+    } catch (e) {
+      aviso.innerHTML = `<p class="imp-error">No se pudo guardar: ${esc(e.message || 'error')}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Guardar cambios';
+    }
+  });
+}
+
+/* Un solo punto para enganchar lo que cada sección del agente necesita. */
+function activarPanelAgente(sec) {
+  if (sec === 'agenda')    activarAgenda();
+  if (sec === 'perfil')    activarPerfilAgente();
+  if (sec === 'citas')     activarCitasAgente();
+  if (sec === 'clientes')  activarClientes();
+  if (sec === 'actividad') activarActividad();
+  if (sec === 'cartera')   activarTabsCartera();
+  if (sec === 'config')    activarConfig();
+}
+
+function activarCitasAgente() {
+  $$('.tabs-bar .tab-btn').forEach((b) => b.addEventListener('click', () => {
+    $$('.tabs-bar .tab-btn').forEach((x) => x.classList.toggle('activo', x === b));
+    $$('.tab-panel').forEach((p) => p.classList.toggle('activo', p.id === 'tab-' + b.dataset.tab));
+  }));
+  $$('[data-cita-estado]').forEach((b) => b.addEventListener('click', () =>
+    cambiarEstadoCita(b.dataset.citaId, b.dataset.citaEstado, b)));
 }
