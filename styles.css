@@ -368,104 +368,15 @@ p  { line-height: 1.7; color: var(--t2); }
   .nav-mobile-open .nav-menu-btn span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 }
 
-/* ─── Hero ───────────────────────────────────────────────── */
-.hero {
-  position: relative;
-  height: 460px;
-  min-height: 420px;
-  max-height: 56vh;
-  overflow: hidden;
-  margin: calc(var(--nav-h) + 1rem) 1.5rem 0;
-  border-radius: var(--r-lg);
-  border: 1px solid rgba(254,96,49,.18);
-  box-shadow: 0 18px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.4);
-}
-.hero-slides { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
-.hero-slide {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;   /* slides inactivos (opacity:0) NO deben capturar clics */
-  transition: opacity 1.2s ease;
-  background-size: cover;
-  background-position: center;
-}
-.hero-slide.active { opacity: 1; pointer-events: auto; }
-.hero-slide-bg {
-  width: 100%; height: 100%;
-  object-fit: cover;
-  transform: scale(1.05);
-  transition: transform 8s ease;
-}
-.hero-slide.active .hero-slide-bg { transform: scale(1); }
-.hero-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom,
-    rgba(255,255,255,.3) 0%,
-    rgba(255,255,255,.15) 40%,
-    rgba(255,255,255,.7) 75%,
-    rgba(255,255,255,.95) 100%
-  );
-}
-.hero-content {
-  position: relative;
-  z-index: 2;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: 0 2.5rem 2.5rem;
-  max-width: 800px;
-  pointer-events: none;
-}
-.hero-content > * { pointer-events: auto; }
-.hero-stats { pointer-events: none; }
-.hero-content .section-label { font-size: .75rem; }
-.hero-title {
-  font-size: clamp(1.8rem, 4.4vw, 3.4rem);
-  font-weight: 700;
-  line-height: 1.05;
-  margin-bottom: .75rem;
-}
-.hero-title em { font-style: italic; color: var(--acento); }
-.hero-desc { font-size: 1.05rem; color: var(--t2); margin-bottom: 2rem; max-width: 560px; }
-.hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
-.hero-dots {
-  position: absolute;
-  bottom: 2rem; right: 2.5rem;
-  display: flex;
-  gap: .5rem;
-  z-index: 3;
-}
-.hero-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: rgba(254,96,49,.3);
-  border: 1px solid var(--acento);
-  transition: var(--transition);
-}
-.hero-dot.active {
-  background: var(--acento);
-  width: 24px;
-  border-radius: 4px;
-}
-.hero-stats {
-  position: absolute;
-  bottom: 3rem; right: 2.5rem;
-  display: flex;
-  gap: 2rem;
-  z-index: 3;
-}
-.hero-stat { text-align: center; }
-.hero-stat-n {
-  font-family: var(--font-serif);
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: var(--acento);
-  line-height: 1;
-}
-.hero-stat-l { font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; color: var(--t2); }
+/* ─── Hero ───────────────────────────────────────────────────────────────────
+   El hero vive en UN solo bloque, más abajo en este archivo (busca «── Hero ──»).
+   Aquí había una segunda copia, heredada del port, con el markup viejo
+   (.hero-content, .hero-title, .hero-overlay…) que ya no existe en ningún HTML.
+   Compartía los nombres de contenedor con el hero actual, así que no se
+   reemplazaban: se fusionaban propiedad por propiedad. De ahí salieron dos
+   bugs — los botones no recibían clics y el hero recortaba su propio CTA.
+   No reintroducir reglas de hero en esta zona.
+   ─────────────────────────────────────────────────────────────────────────── */
 
 /* ─── Search Bar ─────────────────────────────────────────── */
 .search-bar-wrap {
@@ -3546,10 +3457,8 @@ h4 { font-size: clamp(.95rem, 2.2vw, 1.1rem); }
   }
 
   /* ── Hero banner ── */
+  /* Sin altura fija: el hero lo mide su contenido. Ver «── Hero ──». */
   .hero {
-    height: 210px;
-    min-height: 210px;
-    max-height: 42vh;
     margin: calc(var(--nav-h) + .5rem) .75rem 0;
     border-radius: var(--r-md);
   }
@@ -3940,10 +3849,8 @@ h4 { font-size: clamp(.95rem, 2.2vw, 1.1rem); }
   .nav-mobile-open::before { content: none !important; }
 
   /* ── 2. Hero banner ────────────────────────────────────── */
+  /* Sin altura fija: el hero lo mide su contenido. Ver «── Hero ──». */
   .hero {
-    height: 260px !important;
-    min-height: 260px !important;
-    max-height: 260px !important;
     margin: calc(var(--nav-h) + .5rem) 14px 0;
   }
   .hero-content { padding: 0 14px 18px; max-width: 75%; }
@@ -4243,11 +4150,8 @@ h4 { font-size: clamp(.95rem, 2.2vw, 1.1rem); }
   .hb-nav, .hb-arrows,
   .hero-arrow, .hero-prev, .hero-next { display: none !important; }
 
-  /* ── 2. Hero banner: 260px, centered full-width content ─── */
+  /* ── 2. Hero banner: a sangre, sin altura fija ─────────── */
   .hero {
-    height: 260px !important;
-    min-height: 260px !important;
-    max-height: 260px !important;
     margin: calc(var(--nav-h) + .5rem) 0 0 !important;
     border-radius: 0 !important;
     width: 100% !important;
@@ -7396,16 +7300,42 @@ details.faq-item[open] .faq-a {
 }
 
 /* ── Hero ─────────────────────────────────────────────────────────────────── */
-.hero { position: relative; overflow: hidden; background: var(--surface); }
-.hero-slides { position: relative; min-height: 430px; }
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  margin: calc(var(--nav-h) + 1rem) 1.5rem 0;
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(254,96,49,.18);
+  box-shadow: 0 18px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.4);
+}
+
+/* Los slides se apilan en UNA celda de grid, no con position:absolute.
+   Así el hero mide lo que mide el slide más alto: ni recorta el botón del
+   slide largo, ni da un salto de altura al cambiar de slide. Nunca ponerle
+   una altura fija: el contenido es texto y crece al reducir el ancho. */
+.hero-slides { display: grid; border-radius: inherit; overflow: hidden; }
 
 .hero-slide {
-  position: absolute; inset: 0;
+  grid-area: 1 / 1;
+  position: relative;
   display: flex; align-items: center;
   opacity: 0; visibility: hidden;
-  transition: opacity .7s var(--transition), visibility .7s;
+  pointer-events: none;   /* el slide oculto no captura clics del que se ve */
+  /* Nada de var(--transition) aquí: vale «.3s cubic-bezier(…)», y en esta
+     posición el navegador lee ese .3s como DELAY, no como easing. El fundido
+     arrancaba 300ms tarde. Tiempos explícitos y a la vista. */
+  transition: opacity .7s cubic-bezier(.4,0,.2,1), visibility .7s;
 }
-.hero-slide.activa { opacity: 1; visibility: visible; position: relative; }
+/* `pointer-events 0s .7s` retrasa la activación hasta que termina el fundido
+   —y el .7s tiene que coincidir con la duración de la opacidad de arriba—.
+   Sin ese retraso, el slide que entra ya capturaba los clics con la opacidad
+   casi en cero: se tocaba el botón que se veía y se abría el del slide
+   siguiente. Durante los .7s no hay clic ambiguo: no responde ninguno. */
+.hero-slide.activa {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transition: opacity .7s cubic-bezier(.4,0,.2,1), visibility .7s, pointer-events 0s .7s;
+}
 
 .hs-bg { position: absolute; inset: 0; background-size: cover; background-position: center 22%; }
 .hs-marca  .hs-bg { background: linear-gradient(135deg, #fff2ee 0%, #ffe9d0 55%, #fff 100%); }

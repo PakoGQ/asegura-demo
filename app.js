@@ -288,16 +288,32 @@ function irASlide(i) {
 
 function iniciarCarrusel() {
   reiniciarCarrusel();
-  // Se pausa al pasar el mouse: nada peor que leer y que la slide se vaya.
   const hero = $('#hero');
-  if (hero) {
-    hero.addEventListener('mouseenter', () => clearInterval(heroTimer));
-    hero.addEventListener('mouseleave', reiniciarCarrusel);
-  }
+  if (!hero) return;
+
+  // Se pausa al pasar el mouse: nada peor que leer y que la slide se vaya.
+  hero.addEventListener('mouseenter', pausarCarrusel);
+  hero.addEventListener('mouseleave', reiniciarCarrusel);
+
+  // En un celular no hay mouseenter, así que el hero rotaba mientras el
+  // visitante leía y el botón se le iba de abajo del dedo. Al tocar se para;
+  // se reanuda al levantar el dedo, con margen para completar el toque.
+  hero.addEventListener('touchstart', pausarCarrusel, { passive: true });
+  hero.addEventListener('touchend', () => setTimeout(reiniciarCarrusel, 4000), { passive: true });
+
+  // Con la pestaña en segundo plano no tiene sentido gastar el intervalo.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pausarCarrusel(); else reiniciarCarrusel();
+  });
+}
+
+function pausarCarrusel() {
+  clearInterval(heroTimer);
+  heroTimer = null;
 }
 
 function reiniciarCarrusel() {
-  clearInterval(heroTimer);
+  pausarCarrusel();
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   heroTimer = setInterval(() => irASlide(heroIndex + 1), 7000);
 }
