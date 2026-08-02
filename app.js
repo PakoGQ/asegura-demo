@@ -1060,10 +1060,16 @@ function agentesFiltrados() {
 }
 
 function tarjetaAgente(a) {
-  const ramos = (a.ramos || []).slice(0, 3)
+  // Dos ramos, no tres: con la tarjeta a 5 por fila, el tercero salta de línea
+  // y descuadra la altura de toda la fila.
+  const ramos = (a.ramos || []).slice(0, 2)
     .map((r) => `<span class="pill pill-sm">${esc((RAMOS[r] || {}).label || r)}</span>`).join('');
-  const km = a._km !== null && a._km !== undefined
-    ? `<span class="dir-km"><i class="fas fa-location-dot"></i> a ${a._km.toFixed(1)} km</span>` : '';
+
+  // La distancia solo aparece si el visitante compartió su ubicación; ocupa el
+  // lugar de los años de experiencia, que es el dato menos decisivo de los dos.
+  const kmSobreFoto = a._km !== null && a._km !== undefined
+    ? `<span class="agente-card-sf-km">a ${a._km.toFixed(1)} km</span>`
+    : `<span class="agente-card-sf-exp"><i class="fas fa-id-card"></i> ${a.anios_experiencia || 0} años</span>`;
 
   return `
     <article class="agente-card">
@@ -1077,26 +1083,26 @@ function tarjetaAgente(a) {
         <button class="card-quick" data-quick="${esc(a.slug)}" aria-label="Vista rápida de ${esc(a.nombre)}">
           <i class="fas fa-eye"></i>
         </button>
+        <div class="agente-card-sobrefoto">
+          <div class="agente-card-sf-nombre">
+            <span class="agente-card-sf-n">${esc(a.nombre)}${a.verificado
+              ? '<i class="fas fa-circle-check ver-badge" title="Cédula verificada"></i>' : ''}</span>
+            <span class="agente-card-sf-rate">★ ${Number(a.calificacion).toFixed(1)}
+              <small>(${a.num_resenas || 0})</small></span>
+          </div>
+          <div class="agente-card-sf-meta">
+            <span><i class="fas fa-location-dot"></i> ${esc(a.zona || a.ciudad || '')}</span>
+            <span class="agente-card-sf-sep">·</span>
+            ${kmSobreFoto}
+          </div>
+        </div>
       </a>
       <div class="agente-card-body">
-        <a class="agente-card-name" href="perfil.html?a=${esc(a.slug)}">${esc(a.nombre)}
-          ${a.verificado ? '<i class="fas fa-circle-check ver-badge" title="Cédula verificada"></i>' : ''}
-        </a>
         <p class="agente-card-desc">${esc(a.titulo || '')}</p>
-        <div class="agente-card-meta">
-          <span><i class="fas fa-location-dot"></i> ${esc(a.zona || a.ciudad || '')}</span>
-          <span class="agente-card-rate">${estrellas(a.calificacion)}
-            <b>${Number(a.calificacion).toFixed(1)}</b>
-            <small>(${a.num_resenas || 0})</small></span>
-        </div>
-        ${km}
         <div class="agente-card-tags">${ramos}</div>
-        <div class="agente-card-footer">
-          <span class="dir-exp"><i class="fas fa-id-card"></i> ${a.anios_experiencia || 0} años</span>
-          <a class="btn btn-acento btn-sm" href="perfil.html?a=${esc(a.slug)}">
-            <i class="fas fa-calendar-check"></i> Agendar
-          </a>
-        </div>
+        <a class="btn btn-acento btn-sm agente-card-cta" href="perfil.html?a=${esc(a.slug)}">
+          <i class="fas fa-calendar-check"></i> Agendar
+        </a>
       </div>
     </article>`;
 }

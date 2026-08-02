@@ -665,6 +665,9 @@ p  { line-height: 1.7; color: var(--t2); }
   box-shadow: var(--shadow), 0 0 40px rgba(254,96,49,.12);
 }
 .agente-card-img-wrap {
+  display: block;   /* es un <a>: sin esto queda inline y el aspect-ratio
+                       calcula mal la altura, dejando el cuerpo de la tarjeta
+                       fuera del recorte de `overflow:hidden` */
   position: relative;
   aspect-ratio: 3/4;
   overflow: hidden;
@@ -7625,9 +7628,16 @@ body { padding-top: var(--nav-h); }
 .dir-chip i { font-size: .68rem; opacity: .7; }
 .dir-chip:hover i { opacity: 1; }
 
+/* 5 por fila en escritorio. Número fijo, no `auto-fill`: con minmax el número
+   de columnas dependía del ancho de la ventana y saltaba de 4 a 5 sin control.
+   Los escalones de abajo bajan a 4, 3 y 2 según cabe. */
 .agentes-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 1rem;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: .7rem;
 }
+@media (max-width: 1180px) { .agentes-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 960px)  { .agentes-grid { grid-template-columns: repeat(3, 1fr); } }
 
 .card-top-status {
   position: absolute; top: .6rem; left: .6rem;
@@ -7658,16 +7668,69 @@ body { padding-top: var(--nav-h); }
   background: #22c55e; box-shadow: 0 0 5px #22c55e;
 }
 
-.agente-card-body { padding: .9rem 1rem 1rem; }
+/* ── Datos sobre la foto ───────────────────────────────────────────────────
+   Con 5 tarjetas por fila no cabe todo debajo de la imagen. Nombre, zona y
+   calificación van encima, sobre un degradado: es lo que se lee de un vistazo
+   al recorrer el directorio. Debajo queda la especialidad y el botón.
+   El degradado es imprescindible — sobre una foto clara el texto blanco
+   desaparece, y hay fotos de fondo muy claro en el catálogo. */
+.agente-card-sobrefoto {
+  position: absolute; inset: auto 0 0 0; z-index: 2;
+  padding: 2.6rem .6rem .55rem;
+  background: linear-gradient(to top,
+              rgba(8,18,32,.92) 0%, rgba(8,18,32,.72) 42%,
+              rgba(8,18,32,.28) 72%, transparent 100%);
+  pointer-events: none;   /* el clic pasa al enlace de la foto */
+}
+/* Nombre a la izquierda y calificación a la derecha, en la MISMA línea. Con
+   los dos datos seguidos, un nombre largo sobre una zona larga («Adriana Solís
+   · Providencia») empujaba la calificación a un segundo renglón y solo en esas
+   tarjetas: el bloque quedaba más alto y desalineado del resto de la fila. */
+.agente-card-sf-nombre {
+  display: flex; align-items: baseline; gap: .35rem;
+  color: #fff; font-weight: 700; font-size: .86rem; line-height: 1.25;
+  text-shadow: 0 1px 3px rgba(0,0,0,.5);
+}
+.agente-card-sf-n {
+  min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.agente-card-sf-nombre .ver-badge { color: #ffb08f; font-size: .78em; margin-left: .18rem; }
+.agente-card-sf-meta {
+  display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+  margin-top: .18rem;
+  color: rgba(255,255,255,.9); font-size: .72rem;
+  text-shadow: 0 1px 3px rgba(0,0,0,.55);
+}
+.agente-card-sf-meta i { opacity: .75; font-size: .9em; }
+.agente-card-sf-sep { opacity: .45; }
+.agente-card-sf-rate {
+  margin-left: auto; flex: 0 0 auto;   /* pegada a la derecha, nunca se encoge */
+  color: #ffc978; font-weight: 700; font-size: .78rem; white-space: nowrap;
+}
+.agente-card-sf-rate small { color: rgba(255,255,255,.65); font-weight: 400; font-size: .85em; }
+.agente-card-sf-km { color: #ffd0bd; font-weight: 600; white-space: nowrap; }
+
+.agente-card-body { padding: .55rem .65rem .65rem; }
 .agente-card-name {
   display: block; color: var(--t1); text-decoration: none;
 }
 .agente-card-name:hover { color: var(--acento-dk); }
 .ver-badge { color: var(--acento); font-size: .8em; }
 .agente-card-desc {
-  color: var(--t2); font-size: .8rem; line-height: 1.45;
-  margin: 0 0 .6rem; min-height: 2.3em;
+  color: var(--t2); font-size: .76rem; line-height: 1.35;
+  margin: 0 0 .45rem; min-height: 2.7em;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* Los ramos en una sola línea: si envuelven, cada tarjeta mide distinto y la
+   rejilla queda dentada. Lo que no cabe se recorta. */
+.agente-card-tags {
+  display: flex; gap: .25rem; margin-bottom: .5rem;
+  overflow: hidden; height: 1.35rem;
+}
+.agente-card-cta {
+  display: flex; width: 100%; justify-content: center;
+  padding: .42rem .5rem; font-size: .78rem;
 }
 .agente-card-meta { color: var(--t2); margin-bottom: .5rem; gap: .5rem; }
 .agente-card-rate { color: var(--acento); white-space: nowrap; }
@@ -7708,6 +7771,23 @@ body { padding-top: var(--nav-h); }
   .agentes-grid { grid-template-columns: 1fr 1fr; gap: .7rem; }
   .agente-card-body { padding: .7rem .75rem .8rem; }
   .agente-card-desc { display: none; }
+
+  /* A dos por fila la tarjeta mide ~164px: el nombre junto a la calificación
+     se comía las dos terceras partes del nombre («Sofía Beltr…»). Aquí el
+     nombre ocupa su propio renglón y la calificación baja con la zona.
+     `display:contents` disuelve el contenedor del nombre para poder
+     reordenar sus hijos sin duplicar nada en el HTML. */
+  .agente-card-sobrefoto {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    gap: 0 .35rem; padding: 2rem .55rem .45rem;
+  }
+  .agente-card-sf-nombre { display: contents; }
+  .agente-card-sf-n { flex: 1 1 100%; order: 1; font-size: .8rem; }
+  .agente-card-sf-meta { order: 2; margin-top: .1rem; }
+  .agente-card-sf-rate { order: 3; margin-left: 0; font-size: .74rem; }
+  /* Los años no caben junto a zona y calificación; en el perfil siguen. */
+  .agente-card-sf-exp,
+  .agente-card-sf-meta .agente-card-sf-sep { display: none; }
   .dir-filtros { overflow-x: auto; flex-wrap: nowrap; padding-bottom: .4rem; }
   .dir-filtros .dir-select { flex: 0 0 auto; }
 }
