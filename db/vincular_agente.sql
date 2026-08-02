@@ -45,9 +45,12 @@ begin
   select a.usuario_id, a.nombre into id_us, nombre_ag
     from public.agentes a where a.slug = slug_agente;
   if nombre_ag is null then
+    -- La lista sale de la tabla, no de un literal: el seed pasó de 4 a 30
+    -- agentes y un mensaje escrito a mano queda mintiendo a la primera.
     raise exception
-      'No existe ningún agente con el slug "%". Los del seed son: ana-ramirez, luis-torres, sofia-beltran, miguel-aguirre.',
-      slug_agente;
+      'No existe ningún agente con el slug "%". Los que hay son: %',
+      slug_agente,
+      (select string_agg(a.slug, ', ' order by a.slug) from public.agentes a);
   end if;
   if id_us is null then
     raise exception
