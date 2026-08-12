@@ -1,0 +1,38 @@
+{
+  "_comentario": "Rutas TODAS relativas, sin barra inicial. El sitio no vive en la raíz de un dominio sino en https://pakogq.github.io/asegura-demo/, y un '/index.html' apuntaría a la raíz de github.io, donde no hay nada. Si algún día se mueve a dominio propio, esto sigue funcionando igual.",
+
+  "name": "Vaxti Asesores Financieros",
+  "short_name": "Vaxti",
+  "description": "Encuentra un agente de seguros con cédula vigente cerca de ti y agenda una asesoría sin costo.",
+
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+
+  "background_color": "#ffffff",
+  "theme_color": "#00224f",
+  "lang": "es-MX",
+  "dir": "ltr",
+
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+
+  "shortcuts": [
+    {
+      "name": "Buscar agente",
+      "short_name": "Agentes",
+      "description": "Ver el directorio de agentes",
+      "url": "agentes.html"
+    },
+    {
+      "name": "Tipos de seguro",
+      "short_name": "Seguros",
+      "description": "Ramos y coberturas",
+      "url": "ramos.html"
+    }
+  ]
+}

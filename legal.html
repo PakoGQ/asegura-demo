@@ -8,10 +8,24 @@
   <meta name="theme-color" content="#00224f" />
   <link rel="icon" type="image/png" href="logo-icono.png" />
   <link rel="apple-touch-icon" href="logo-icono.png" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 </head>
 <body>
+
+<!-- ── Banner de instalación PWA (solo móvil; el CSS lo oculta en escritorio) ── -->
+<div class="pwa-install-banner" id="pwaInstallBanner" role="region" aria-label="Instalar la aplicación">
+  <img src="icon-192.png" alt="" class="pwa-install-mark" />
+  <div class="pwa-install-copy">
+    <strong>Instala Vaxti en tu teléfono</strong>
+    <span>Tus agentes y tus citas, a un toque</span>
+  </div>
+  <button class="pwa-install-cta" id="pwaInstallBtn" type="button">Instalar</button>
+  <button class="pwa-install-close" id="pwaDismissBtn" type="button" aria-label="Cerrar">
+    <i class="fas fa-times"></i>
+  </button>
+</div>
 
 <nav class="nav" id="mainNav">
   <div class="nav-brand">

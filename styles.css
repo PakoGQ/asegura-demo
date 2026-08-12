@@ -3297,10 +3297,13 @@ h4 { font-size: clamp(.95rem, 2.2vw, 1.1rem); }
   font-size: .68rem;
   letter-spacing: .01em;
 }
-/* Aviso de discreción: al instalar, la PWA queda como "Financel" con icono
-   de finanzas. Va como renglón completo debajo de la fila (flex-basis:100%)
-   para que quepa el texto; fuera de .pwa-install-copy a propósito, porque en
-   móvil esos <span> se ocultan. */
+/* Renglón completo debajo de la fila (flex-basis:100%), para textos que no
+   caben al lado del botón; va fuera de .pwa-install-copy a propósito, porque
+   en móvil esos <span> se ocultan.
+   Viene del port, donde llevaba el aviso de que la app se instalaba con otro
+   nombre por discreción. Aquí no hay nada que advertir —se instala como
+   Vaxti— así que el banner no lo usa; la clase se conserva por si hiciera
+   falta una segunda línea. */
 .pwa-install-note {
   flex-basis: 100%;
   width: 100%;

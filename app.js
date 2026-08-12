@@ -885,6 +885,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initNav();
   buildFiltrosBusqueda();
 
+  // Antes de tocar la red: el service worker sirve la caché si no hay señal.
+  initPWA();
+  initInstalarPWA();
+
   const form = $('#searchForm');
   if (form) form.addEventListener('submit', onBuscar);
 
@@ -5952,3 +5956,106 @@ const HORAS_LIBRES = (fecha) => (AGENDA_PERFIL && AGENDA_PERFIL[fecha]) || [];
    dejándolo sin citas: se muestran los días hábiles como antes. Pero si SÍ la
    configuró, se respeta al pie de la letra, incluidos los días que cerró. */
 const AGENDA_CONFIGURADA = () => AGENDA_PERFIL !== null && Object.keys(AGENDA_PERFIL).length > 0;
+
+/* ===========================================================================
+   30. PWA — service worker, banner de actualización y de instalación
+
+   El service worker se registra con ruta RELATIVA. El sitio vive en
+   /asegura-demo/, así que un '/sw.js' buscaría en la raíz de github.io y no
+   se registraría nunca. Con './sw.js' el scope queda en el subdirectorio,
+   que es justo lo que se quiere.
+
+   No se registra en localhost salvo por HTTPS o 127.0.0.1: durante el
+   desarrollo un service worker cacheando de por medio hace perder horas
+   persiguiendo cambios que ya están hechos pero no se ven.
+   =========================================================================== */
+function initPWA() {
+  if (!('serviceWorker' in navigator)) return;
+
+  // El registro necesita contexto seguro. GitHub Pages es HTTPS; en local,
+  // localhost cuenta como seguro para el navegador.
+  if (!window.isSecureContext) return;
+
+  const registrar = () => {
+    navigator.serviceWorker.register('./sw.js')
+      .catch((e) => console.warn('El service worker no se registró:', e.message));
+  };
+  // Si `load` ya pasó, addEventListener no dispara nunca y el service worker
+  // no se registraría jamás. Pasa con la página cacheada o al volver atrás.
+  if (document.readyState === 'complete') registrar();
+  else window.addEventListener('load', registrar, { once: true });
+
+  // Aviso de versión nueva. El sw manda SW_UPDATED al activarse.
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (!e.data || e.data.type !== 'SW_UPDATED') return;
+    // Solo molesta si ya había una versión antes: en la primera visita el
+    // service worker también se activa, y ahí un «hay novedades» no significa
+    // nada para quien acaba de entrar.
+    if (!localStorage.getItem('vaxtiSWVisto')) {
+      localStorage.setItem('vaxtiSWVisto', '1');
+      return;
+    }
+    mostrarBannerActualizacion();
+  });
+}
+
+function mostrarBannerActualizacion() {
+  if ($('#pwaUpdateBanner')) { $('#pwaUpdateBanner').style.display = 'flex'; return; }
+  const b = document.createElement('div');
+  b.className = 'pwa-update-banner';
+  b.id = 'pwaUpdateBanner';
+  b.style.display = 'flex';
+  b.innerHTML = `<span>Hay una versión nueva del sitio</span>
+                 <button type="button" id="pwaUpdateBtn">Actualizar</button>`;
+  document.body.appendChild(b);
+  $('#pwaUpdateBtn').addEventListener('click', () => location.reload());
+}
+
+/* Banner de instalación. Chrome/Edge en Android disparan `beforeinstallprompt`;
+   iOS no lo implementa y hay que explicar el «Compartir → Agregar a inicio». */
+function initInstalarPWA() {
+  const banner = $('#pwaInstallBanner');
+  if (!banner) return;
+
+  const instalada = window.matchMedia('(display-mode: standalone)').matches ||
+                    window.navigator.standalone === true;
+  const DIAS = 7;
+  const cerradoEn = Number(localStorage.getItem('vaxtiPWACerrado') || 0);
+  const cerradoHaces = (Date.now() - cerradoEn) / 86400000;
+  if (instalada || (cerradoEn && cerradoHaces < DIAS)) return;
+
+  let prompt = null;
+  const mostrar = () => banner.classList.add('is-visible');
+  const ocultar = () => {
+    banner.classList.remove('is-visible');
+    localStorage.setItem('vaxtiPWACerrado', String(Date.now()));
+  };
+
+  window.addEventListener('beforeinstallprompt', (ev) => {
+    ev.preventDefault();
+    prompt = ev;
+    mostrar();
+  });
+
+  // iOS no dispara el evento: se enseña igual, con instrucciones.
+  const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (esIOS) mostrar();
+
+  const btn = $('#pwaInstallBtn');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      if (prompt) {
+        prompt.prompt();
+        const r = await prompt.userChoice;
+        prompt = null;
+        if (r.outcome === 'accepted') ocultar();
+      } else {
+        showToast('Toca Compartir y elige «Agregar a inicio».');
+      }
+    });
+  }
+  const cerrar = $('#pwaDismissBtn');
+  if (cerrar) cerrar.addEventListener('click', ocultar);
+
+  window.addEventListener('appinstalled', ocultar);
+}
