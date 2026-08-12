@@ -8555,6 +8555,38 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
    display:none y sale de la rejilla: sin esto, el botón de acceso se corría
    al centro en vez de quedarse a la derecha. */
 
+/* ── Móvil y tablet: un solo menú, el de abajo ─────────────────────────────
+   Con `.bottom-nav` en pantalla, la esquina superior derecha repetía lo que
+   ya estaba abajo:
+
+     · el candado abre `loginModal`, exactamente igual que «Cuenta» del menú
+       inferior — y el mismo código convierte a los dos en «Mi panel» cuando
+       hay sesión, así que ocultarlo no quita ningún acceso;
+     · el hamburguesa repetía Inicio, Agentes y Seguros, y añadía Únete y
+       Legal, que están en el pie de todas las páginas.
+
+   Dos menús para lo mismo en 375px de ancho es ruido, y este es el espacio
+   que necesita la barra al instalarse como PWA.
+
+   EL CORTE ES 900px, NO 768. Con 768 quedaba un hueco sin navegación entre
+   769 y 900: ahí `.nav-center` ya está en display:none (regla de ≤900px) y
+   el hamburguesa también (regla de ≥769px), pero el menú inferior todavía no
+   entraba. En una tablet en vertical no había forma de moverse por el sitio
+   salvo bajando al pie. Subiendo el corte a 900 los tres cambian a la vez.
+
+   Los paneles se excluyen del menú inferior a propósito: tienen su propia
+   barra lateral. Su cabecera no lleva `.nav-cta`, así que el resto les da
+   igual.
+   ────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  body:not(.panel-page) .bottom-nav { display: flex; }
+  .nav-cta { display: none !important; }
+  /* Sin botón que lo abra, el cajón solo estorbaría al tabular. */
+  .mobile-drawer { display: none !important; }
+  /* La marca recupera el ancho que ocupaba la columna de la derecha. */
+  .nav { grid-template-columns: 1fr auto; }
+}
+
 /* ═══════════════════════════════════════════════════════════
    CARTERA E IMPORTADOR
    Antes vivían en cartera/assets/css con sus propios tokens y la fuente del
