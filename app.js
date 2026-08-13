@@ -557,9 +557,14 @@ const AGENTES_DEMO = [
 async function cargarAgentes() {
   if (!window.sbClient) { AGENTES = AGENTES_DEMO; return AGENTES; }
   try {
+    // `orden_publico` primero: es el puesto que el Director fijó a mano desde
+    // Apariencia. Quien no tiene puesto va después (`nullsFirst: false`) con el
+    // criterio de siempre, así se puede fijar solo la cabecera de la lista y
+    // dejar que el resto se acomode solo.
     const { data, error } = await sbClient
       .from('v_agentes_publico')
       .select('*')
+      .order('orden_publico', { ascending: true, nullsFirst: false })
       .order('es_destacado', { ascending: false })
       .order('calificacion', { ascending: false });
     if (error) throw error;
@@ -571,13 +576,73 @@ async function cargarAgentes() {
   return AGENTES;
 }
 
+/* Slides que el Director armó en el panel. Si no hay ninguno —o no hay base—
+   se devuelve null y `buildHero()` cae a los de siempre: la portada nunca se
+   queda sin hero por no haber configurado nada. */
+let HERO_SLIDES = null;
+
+async function cargarHero() {
+  if (!window.sbClient) return null;
+  try {
+    const { data, error } = await sbClient
+      .from('v_hero_publico')
+      .select('*')
+      .order('orden', { ascending: true });
+    if (error) throw error;
+    HERO_SLIDES = (data && data.length) ? data : null;
+  } catch (e) {
+    console.warn('No se pudo leer el hero configurado:', e.message);
+    HERO_SLIDES = null;
+  }
+  return HERO_SLIDES;
+}
+
 /* ===========================================================================
    4. Hero con slides
    =========================================================================== */
+/* Un slide armado desde el panel. Los tres fondos son los que ya existían en
+   el CSS, para que lo que monte el Director se vea como el resto del sitio. */
+function slideConfigurado(s, activo) {
+  const clase = { marca: 'hs-marca', azul: 'hs-agenda', agente: 'hs-agente' }[s.fondo] || 'hs-marca';
+  // Un slide de tipo agente cuyo agente se ocultó o se borró se queda sin
+  // foto; se degrada al fondo de marca en vez de salir en negro.
+  const foto = s.fondo === 'agente' && s.agente_foto ? s.agente_foto : null;
+  const bg = foto ? ` style="background-image:url('${esc(foto)}')"` : '';
+  const cls = foto ? clase : (clase === 'hs-agente' ? 'hs-marca' : clase);
+
+  const boton = s.cta_texto
+    ? `<div class="hs-acciones">
+         <a href="${esc(s.cta_url || 'agentes.html')}" class="btn btn-acento btn-lg">
+           <i class="fas fa-calendar-check"></i> ${esc(s.cta_texto)}
+         </a>
+       </div>`
+    : '';
+
+  return `
+    <div class="hero-slide ${cls}${activo ? ' activa' : ''}">
+      <div class="hs-bg"${bg}></div>
+      <div class="hs-inner">
+        ${s.etiqueta ? `<p class="hs-label">${esc(s.etiqueta)}</p>` : ''}
+        <h2 class="hs-titulo">${esc(s.titulo)}${
+          s.titulo_acento ? `<br><span class="acento">${esc(s.titulo_acento)}</span>` : ''}</h2>
+        ${s.texto ? `<p class="hs-desc">${esc(s.texto)}</p>` : ''}
+        ${boton}
+      </div>
+    </div>`;
+}
+
 function buildHero() {
   const wrap = $('#heroSlides');
   const dots = $('#heroDots');
   if (!wrap) return;
+
+  // Si el Director configuró slides, mandan los suyos. Si no, los de siempre.
+  if (HERO_SLIDES && HERO_SLIDES.length) {
+    wrap.innerHTML = HERO_SLIDES.map((s, i) => slideConfigurado(s, i === 0)).join('');
+    pintarPuntosHero(dots, HERO_SLIDES.length);
+    iniciarCarrusel();
+    return;
+  }
 
   const destacados = AGENTES.filter((a) => a.es_destacado).slice(0, 2);
   const slides = [];
@@ -638,16 +703,21 @@ function buildHero() {
     </div>`);
 
   wrap.innerHTML = slides.join('');
-  if (dots) {
-    dots.innerHTML = slides.map((_, i) =>
-      `<button class="hero-dot ${i === 0 ? 'activo' : ''}" data-i="${i}" aria-label="Slide ${i + 1}"></button>`
-    ).join('');
-    dots.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-i]');
-      if (b) irASlide(Number(b.dataset.i));
-    });
-  }
+  pintarPuntosHero(dots, slides.length);
   iniciarCarrusel();
+}
+
+/* Los puntos de abajo. Extraído para que los slides del panel y los de
+   respaldo compartan exactamente el mismo comportamiento. */
+function pintarPuntosHero(dots, cuantos) {
+  if (!dots) return;
+  dots.innerHTML = Array.from({ length: cuantos }, (_, i) =>
+    `<button class="hero-dot ${i === 0 ? 'activo' : ''}" data-i="${i}" aria-label="Slide ${i + 1}"></button>`
+  ).join('');
+  dots.onclick = (e) => {
+    const b = e.target.closest('[data-i]');
+    if (b) irASlide(Number(b.dataset.i));
+  };
 }
 
 let heroIndex = 0;
@@ -902,6 +972,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (form) form.addEventListener('submit', onBuscar);
 
   await cargarAgentes();
+  // Solo en la portada: es la única pantalla con hero.
+  if ($('#heroSlides')) await cargarHero();
 
   // Cada init se protege buscando su propio elemento: el mismo app.js sirve
   // para todas las páginas, igual que en el proyecto de referencia.
@@ -2152,6 +2224,12 @@ async function initPanelDirector() {
     main.scrollTop = 0;
     if (sec === 'resenas')       activarModeracion();
     if (sec === 'agentes') repintarAgentes();
+    if (sec === 'apariencia') {
+      cargarApariencia().then(() => {
+        main.innerHTML = seccionApariencia();
+        activarApariencia();
+      });
+    }
     if (sec === 'config')     activarConfig();
     if (sec === 'afiliacion') activarAfiliacion();
     if (sec === 'postulaciones') activarPostulaciones();
@@ -2181,7 +2259,153 @@ async function initPanelDirector() {
   ir('dashboard');
 }
 
+/* ===========================================================================
+   Apariencia — lo que el Director cambia del sitio público sin tocar código.
+
+   Dos cosas: los slides del hero de la portada y el orden en que salen los
+   agentes (el mismo orden manda en la galería de la portada y en el
+   directorio; se decidió así para que acomode una vez y no dos).
+
+   Todo se guarda en Supabase: `hero_slides` y `agentes.orden_publico`.
+   =========================================================================== */
+let HERO_EDIT = [];      // los slides tal como se están editando
+let ORDEN_EDIT = [];     // los agentes en el orden que se está armando
+
+const FONDOS_HERO = {
+  marca:  { label: 'Claro con naranja', ayuda: 'El de la bienvenida' },
+  azul:   { label: 'Azul de marca',     ayuda: 'Texto en blanco' },
+  agente: { label: 'Foto de un agente', ayuda: 'Elige cuál abajo' },
+};
+
+function filaSlideHero(s, i, total) {
+  const esAgente = s.fondo === 'agente';
+  return `
+  <article class="apar-slide" data-i="${i}">
+    <header class="apar-slide-head">
+      <span class="apar-slide-num">${i + 1}</span>
+      <strong>${esc(s.titulo || 'Slide sin título')}</strong>
+      <span class="pill pill-sm ${s.activo ? 'pill-ok' : 'pill-off'}">
+        ${s.activo ? 'Visible' : 'Apagado'}</span>
+      <div class="apar-slide-acciones">
+        <button class="icon-btn" data-mover="-1" ${i === 0 ? 'disabled' : ''}
+                title="Subir"><i class="fas fa-arrow-up"></i></button>
+        <button class="icon-btn" data-mover="1" ${i === total - 1 ? 'disabled' : ''}
+                title="Bajar"><i class="fas fa-arrow-down"></i></button>
+        <button class="icon-btn" data-toggle title="${s.activo ? 'Apagar' : 'Encender'}">
+          <i class="fas fa-eye${s.activo ? '' : '-slash'}"></i></button>
+        <button class="icon-btn" data-borrar title="Borrar"><i class="fas fa-trash"></i></button>
+      </div>
+    </header>
+
+    <div class="apar-campos">
+      <label>Etiqueta pequeña
+        <input data-campo="etiqueta" value="${esc(s.etiqueta || '')}"
+               placeholder="Guadalajara" maxlength="40" />
+      </label>
+      <label>Título
+        <input data-campo="titulo" value="${esc(s.titulo || '')}"
+               placeholder="Encuentra al agente" maxlength="80" />
+      </label>
+      <label>Segunda línea, en naranja
+        <input data-campo="titulo_acento" value="${esc(s.titulo_acento || '')}"
+               placeholder="que sí te explica" maxlength="80" />
+      </label>
+      <label class="apar-ancho">Texto
+        <textarea data-campo="texto" rows="2" maxlength="240"
+                  placeholder="Una o dos líneas explicando la idea.">${esc(s.texto || '')}</textarea>
+      </label>
+      <label>Texto del botón
+        <input data-campo="cta_texto" value="${esc(s.cta_texto || '')}"
+               placeholder="Ver agentes" maxlength="30" />
+      </label>
+      <label>A dónde lleva
+        <select data-campo="cta_url">
+          ${['agentes.html', 'ramos.html', 'unete.html', ''].map((u) =>
+            `<option value="${u}" ${(s.cta_url || '') === u ? 'selected' : ''}>${
+              { 'agentes.html': 'Directorio de agentes', 'ramos.html': 'Tipos de seguro',
+                'unete.html': 'Únete al equipo', '': 'Sin botón' }[u]}</option>`).join('')}
+        </select>
+      </label>
+      <label>Fondo
+        <select data-campo="fondo">
+          ${Object.entries(FONDOS_HERO).map(([k, v]) =>
+            `<option value="${k}" ${s.fondo === k ? 'selected' : ''}>${v.label}</option>`).join('')}
+        </select>
+      </label>
+      <label class="${esAgente ? '' : 'oculto'}" data-solo-agente>Qué agente
+        <select data-campo="agente_id">
+          <option value="">— elige —</option>
+          ${AGENTES.map((a) => `<option value="${esc(a.id)}" ${
+            String(s.agente_id) === String(a.id) ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}
+        </select>
+      </label>
+    </div>
+  </article>`;
+}
+
+function seccionApariencia() {
+  const slides = HERO_EDIT.length ? HERO_EDIT : [];
+  return `
+  <div class="admin-head">
+    <div>
+      <h1>Apariencia del sitio</h1>
+      <p class="admin-sub">Cambia lo que ve un cliente sin tocar código. Se
+         publica en cuanto guardas.</p>
+    </div>
+    <a class="btn btn-ghost btn-sm" href="index.html" target="_blank" rel="noopener">
+      <i class="fas fa-arrow-up-right-from-square"></i> Ver la portada
+    </a>
+  </div>
+
+  <div class="tabs-bar" id="aparTabs">
+    <button class="tab-btn activo" data-tab="hero">Slides de la portada</button>
+    <button class="tab-btn" data-tab="orden">Orden de los agentes</button>
+  </div>
+
+  <section class="admin-card" data-panel="hero">
+    <div class="apar-barra">
+      <p class="admin-sub">Los slides salen en este orden, uno tras otro.
+         Los apagados no se publican.</p>
+      <div>
+        <button class="btn btn-ghost btn-sm" id="aparNuevoSlide">
+          <i class="fas fa-plus"></i> Añadir slide</button>
+        <button class="btn btn-acento btn-sm" id="aparGuardarHero">
+          <i class="fas fa-floppy-disk"></i> Guardar</button>
+      </div>
+    </div>
+
+    <div id="aparSlides">
+      ${slides.length ? slides.map((s, i) => filaSlideHero(s, i, slides.length)).join('')
+        : `<div class="dir-vacio">
+             <i class="fas fa-images"></i>
+             <h3>La portada usa los slides de fábrica</h3>
+             <p>Añade uno y a partir de ahí manda lo que armes aquí.
+                Mientras no haya ninguno, la portada sigue como está.</p>
+             <button class="btn btn-acento btn-sm" id="aparPrimerSlide">
+               <i class="fas fa-plus"></i> Añadir el primero</button>
+           </div>`}
+    </div>
+  </section>
+
+  <section class="admin-card oculto" data-panel="orden">
+    <div class="apar-barra">
+      <p class="admin-sub">Arrastra para acomodar. Este orden manda en la
+         portada y en el directorio. Los que dejes sin puesto salen después,
+         ordenados por destacado y calificación.</p>
+      <div>
+        <button class="btn btn-ghost btn-sm" id="aparLimpiarOrden">
+          <i class="fas fa-rotate-left"></i> Quitar el orden manual</button>
+        <button class="btn btn-acento btn-sm" id="aparGuardarOrden">
+          <i class="fas fa-floppy-disk"></i> Guardar</button>
+      </div>
+    </div>
+    <ol class="apar-orden" id="aparOrden"></ol>
+  </section>`;
+}
+
 const SECCIONES_DIRECTOR = {
+
+  apariencia: seccionApariencia,
 
   dashboard() {
     const citas = citasDeEquipo();
@@ -6065,4 +6289,264 @@ function initInstalarPWA() {
   if (cerrar) cerrar.addEventListener('click', ocultar);
 
   window.addEventListener('appinstalled', ocultar);
+}
+
+/* ===========================================================================
+   31. Apariencia — la lógica de la sección del Director
+
+   Arrastrar y soltar sin librería: el HTML5 drag&drop nativo no funciona en
+   táctil, y el Director va a usar esto desde el celular. Se implementa con
+   eventos de puntero, que cubren ratón y dedo con el mismo código.
+   =========================================================================== */
+async function cargarApariencia() {
+  HERO_EDIT = [];
+  if (window.sbClient) {
+    try {
+      const { data, error } = await sbClient
+        .from('hero_slides').select('*').order('orden', { ascending: true });
+      if (error) throw error;
+      HERO_EDIT = data || [];
+    } catch (e) {
+      console.warn('No se pudieron leer los slides:', e.message);
+    }
+  }
+  // El orden arranca como está saliendo el sitio ahora mismo, para que el
+  // Director mueva desde lo que ya ve y no desde una lista en otro orden.
+  ORDEN_EDIT = AGENTES.slice();
+}
+
+function pintarSlidesHero() {
+  const cont = $('#aparSlides');
+  if (!cont) return;
+  cont.innerHTML = HERO_EDIT.length
+    ? HERO_EDIT.map((s, i) => filaSlideHero(s, i, HERO_EDIT.length)).join('')
+    : `<div class="dir-vacio">
+         <i class="fas fa-images"></i>
+         <h3>La portada usa los slides de fábrica</h3>
+         <p>Añade uno y a partir de ahí manda lo que armes aquí.</p>
+         <button class="btn btn-acento btn-sm" id="aparPrimerSlide">
+           <i class="fas fa-plus"></i> Añadir el primero</button>
+       </div>`;
+}
+
+function pintarOrdenAgentes() {
+  const ol = $('#aparOrden');
+  if (!ol) return;
+  ol.innerHTML = ORDEN_EDIT.map((a, i) => `
+    <li class="apar-fila" draggable="false" data-id="${esc(a.id)}">
+      <span class="apar-asa" title="Arrastra para mover"><i class="fas fa-grip-vertical"></i></span>
+      <span class="apar-puesto">${i + 1}</span>
+      <img class="apar-foto" src="${esc(a.foto)}" alt="" loading="lazy" />
+      <span class="apar-nombre">${esc(a.nombre)}
+        <small>${esc(a.zona || '')} · ${Number(a.calificacion).toFixed(1)} ★</small>
+      </span>
+      ${a.es_destacado ? '<span class="pill pill-acento pill-sm">Destacado</span>' : ''}
+    </li>`).join('');
+}
+
+/* Arrastre con eventos de puntero: el mismo código sirve para ratón y dedo.
+   Se mueve el elemento en la lista según sobre qué fila esté el cursor. */
+function activarArrastre(ol) {
+  let origen = null;
+
+  const filaEn = (y) => [...ol.children].find((li) => {
+    const r = li.getBoundingClientRect();
+    return y >= r.top && y <= r.bottom;
+  });
+
+  ol.addEventListener('pointerdown', (e) => {
+    const asa = e.target.closest('.apar-asa');
+    if (!asa) return;                       // solo se arrastra desde el asa
+    origen = asa.closest('.apar-fila');
+    origen.classList.add('arrastrando');
+    ol.setPointerCapture(e.pointerId);
+    e.preventDefault();                     // sin esto el móvil hace scroll
+  });
+
+  ol.addEventListener('pointermove', (e) => {
+    if (!origen) return;
+    e.preventDefault();
+    const destino = filaEn(e.clientY);
+    if (!destino || destino === origen) return;
+    const r = destino.getBoundingClientRect();
+    const despues = e.clientY > r.top + r.height / 2;
+    ol.insertBefore(origen, despues ? destino.nextSibling : destino);
+  });
+
+  const soltar = (e) => {
+    if (!origen) return;
+    origen.classList.remove('arrastrando');
+    origen = null;
+    try { ol.releasePointerCapture(e.pointerId); } catch (_) {}
+    // La lista visual es la verdad: se reconstruye el array desde el DOM.
+    const ids = [...ol.children].map((li) => li.dataset.id);
+    ORDEN_EDIT = ids.map((id) => ORDEN_EDIT.find((a) => String(a.id) === id)).filter(Boolean);
+    pintarOrdenAgentes();
+  };
+  ol.addEventListener('pointerup', soltar);
+  ol.addEventListener('pointercancel', soltar);
+}
+
+function activarApariencia() {
+  // ── Pestañas ──
+  const tabs = $('#aparTabs');
+  if (tabs) {
+    tabs.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tab]');
+      if (!b) return;
+      $$('#aparTabs .tab-btn').forEach((x) => x.classList.toggle('activo', x === b));
+      $$('[data-panel]').forEach((p) => p.classList.toggle('oculto', p.dataset.panel !== b.dataset.tab));
+    });
+  }
+
+  pintarSlidesHero();
+  pintarOrdenAgentes();
+  const ol = $('#aparOrden');
+  if (ol) activarArrastre(ol);
+
+  const nuevo = () => {
+    HERO_EDIT.push({
+      orden: HERO_EDIT.length, activo: true, fondo: 'marca',
+      etiqueta: '', titulo: 'Título del slide', titulo_acento: '', texto: '',
+      cta_texto: 'Ver agentes', cta_url: 'agentes.html', agente_id: null,
+    });
+    pintarSlidesHero();
+  };
+
+  // Delegado: las filas se repintan enteras, así que no se puede enganchar
+  // cada botón por separado.
+  const cont = $('#aparSlides');
+  if (cont) {
+    cont.addEventListener('click', (e) => {
+      if (e.target.closest('#aparPrimerSlide')) { nuevo(); return; }
+      const fila = e.target.closest('.apar-slide');
+      if (!fila) return;
+      const i = Number(fila.dataset.i);
+      const mover = e.target.closest('[data-mover]');
+      if (mover) {
+        const j = i + Number(mover.dataset.mover);
+        if (j < 0 || j >= HERO_EDIT.length) return;
+        [HERO_EDIT[i], HERO_EDIT[j]] = [HERO_EDIT[j], HERO_EDIT[i]];
+        pintarSlidesHero(); return;
+      }
+      if (e.target.closest('[data-toggle]')) {
+        HERO_EDIT[i].activo = !HERO_EDIT[i].activo; pintarSlidesHero(); return;
+      }
+      if (e.target.closest('[data-borrar]')) {
+        if (!confirm('¿Borrar este slide de la portada?')) return;
+        HERO_EDIT.splice(i, 1); pintarSlidesHero();
+      }
+    });
+
+    // Cada tecleo actualiza el objeto; se guarda al pulsar Guardar.
+    cont.addEventListener('input', (e) => {
+      const campo = e.target.dataset.campo;
+      if (!campo) return;
+      const fila = e.target.closest('.apar-slide');
+      HERO_EDIT[Number(fila.dataset.i)][campo] = e.target.value || null;
+      // El encabezado sigue al título mientras se escribe. Se toca solo ese
+      // texto en vez de repintar la fila: repintar aquí haría perder el foco
+      // y el cursor a media palabra.
+      if (campo === 'titulo') {
+        fila.querySelector('.apar-slide-head strong').textContent =
+          e.target.value.trim() || 'Slide sin título';
+      }
+    });
+    cont.addEventListener('change', (e) => {
+      if (e.target.dataset.campo !== 'fondo') return;
+      const fila = e.target.closest('.apar-slide');
+      // Enseña u oculta el selector de agente sin repintar: repintar aquí
+      // haría perder el foco a media edición.
+      const sel = fila.querySelector('[data-solo-agente]');
+      if (sel) sel.classList.toggle('oculto', e.target.value !== 'agente');
+    });
+  }
+
+  const btnNuevo = $('#aparNuevoSlide');
+  if (btnNuevo) btnNuevo.addEventListener('click', nuevo);
+
+  const btnHero = $('#aparGuardarHero');
+  if (btnHero) btnHero.addEventListener('click', () => guardarHero(btnHero));
+
+  const btnOrden = $('#aparGuardarOrden');
+  if (btnOrden) btnOrden.addEventListener('click', () => guardarOrden(btnOrden));
+
+  const btnLimpiar = $('#aparLimpiarOrden');
+  if (btnLimpiar) btnLimpiar.addEventListener('click', () => limpiarOrden(btnLimpiar));
+}
+
+async function guardarHero(btn) {
+  if (!window.sbClient) { showToast('En modo demo no se guarda.', 'error'); return; }
+  const vacio = HERO_EDIT.find((s) => !s.titulo || !s.titulo.trim());
+  if (vacio) { showToast('Hay un slide sin título.', 'error'); return; }
+  const sinAgente = HERO_EDIT.find((s) => s.fondo === 'agente' && !s.agente_id);
+  if (sinAgente) { showToast('Un slide con foto de agente no tiene agente elegido.', 'error'); return; }
+
+  btn.disabled = true;
+  const antes = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
+  try {
+    // Se borra y se reinserta: mantener el diff de altas, bajas y cambios de
+    // orden con upserts sale más frágil que rehacer una tabla de cinco filas.
+    const { error: eDel } = await sbClient.from('hero_slides').delete()
+      .not('id', 'is', null);
+    if (eDel) throw eDel;
+
+    if (HERO_EDIT.length) {
+      const filas = HERO_EDIT.map((s, i) => ({
+        orden: i, activo: !!s.activo, fondo: s.fondo || 'marca',
+        etiqueta: s.etiqueta || null, titulo: s.titulo.trim(),
+        titulo_acento: s.titulo_acento || null, texto: s.texto || null,
+        cta_texto: s.cta_texto || null, cta_url: s.cta_url || null,
+        agente_id: s.fondo === 'agente' ? s.agente_id : null,
+        director_id: MI_USUARIO_ID,
+      }));
+      const { error } = await sbClient.from('hero_slides').insert(filas);
+      if (error) throw error;
+    }
+    showToast('Portada actualizada. Recarga el sitio para verla.');
+    await cargarApariencia();
+    pintarSlidesHero();
+  } catch (e) {
+    showToast('No se pudo guardar: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.innerHTML = antes;
+  }
+}
+
+async function guardarOrden(btn) {
+  if (!window.sbClient) { showToast('En modo demo no se guarda.', 'error'); return; }
+  btn.disabled = true;
+  const antes = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
+  try {
+    // Uno por uno: `upsert` sobre la vista no vale y un update masivo pediría
+    // una función en la base. Son 30 filas, se nota poco.
+    for (let i = 0; i < ORDEN_EDIT.length; i++) {
+      const { error } = await sbClient.from('agentes')
+        .update({ orden_publico: i + 1 }).eq('id', ORDEN_EDIT[i].id);
+      if (error) throw error;
+    }
+    showToast('Orden guardado. Así saldrán en la portada y el directorio.');
+  } catch (e) {
+    showToast('No se pudo guardar el orden: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.innerHTML = antes;
+  }
+}
+
+async function limpiarOrden(btn) {
+  if (!window.sbClient) { showToast('En modo demo no se guarda.', 'error'); return; }
+  if (!confirm('¿Quitar el orden manual? Vuelven a ordenarse por destacado y calificación.')) return;
+  btn.disabled = true;
+  try {
+    const { error } = await sbClient.from('agentes')
+      .update({ orden_publico: null }).not('id', 'is', null);
+    if (error) throw error;
+    showToast('Listo, vuelven al orden automático.');
+  } catch (e) {
+    showToast('No se pudo limpiar: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
 }

@@ -8846,3 +8846,97 @@ a.panel-marca:hover .logo-img { opacity: .82; transition: var(--transition); }
   color: var(--acento); margin-top: .1rem;
 }
 .pf-dia.ocupado .pf-dia-libres { display: none; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   APARIENCIA — la sección del Director que cambia el sitio público
+   ═══════════════════════════════════════════════════════════════════════════ */
+.apar-barra {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.apar-barra .admin-sub { margin: 0; max-width: 52ch; }
+.apar-barra > div { display: flex; gap: .5rem; flex-shrink: 0; }
+
+/* ── Slides del hero ── */
+.apar-slide {
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  margin-bottom: .8rem; overflow: hidden; background: var(--card);
+}
+.apar-slide-head {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  padding: .6rem .8rem; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.apar-slide-num {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  background: var(--acento); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .75rem; font-weight: 700;
+}
+.apar-slide-head strong { font-size: .9rem; min-width: 0; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apar-slide-acciones { display: flex; gap: .25rem; flex-shrink: 0; }
+.apar-slide-acciones .icon-btn:disabled { opacity: .35; cursor: default; }
+
+.apar-campos {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: .7rem; padding: .9rem .8rem;
+}
+.apar-campos label {
+  display: flex; flex-direction: column; gap: .25rem;
+  font-size: .74rem; font-weight: 600; color: var(--t2);
+}
+.apar-campos .apar-ancho { grid-column: 1 / -1; }
+.apar-campos input, .apar-campos select, .apar-campos textarea {
+  padding: .45rem .6rem; border: 1px solid var(--border);
+  border-radius: var(--r-sm); background: var(--bg);
+  font: inherit; font-size: .84rem; font-weight: 400; color: var(--t1);
+}
+.apar-campos textarea { resize: vertical; }
+.apar-campos input:focus, .apar-campos select:focus, .apar-campos textarea:focus {
+  outline: none; border-color: var(--acento);
+}
+
+/* ── Orden de los agentes ── */
+.apar-orden { list-style: none; margin: 0; padding: 0; }
+.apar-fila {
+  display: flex; align-items: center; gap: .7rem;
+  padding: .45rem .6rem; margin-bottom: .35rem;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--card);
+  /* Sin esto, al arrastrar con el dedo el navegador hace scroll de la página
+     en vez de mover la fila. */
+  touch-action: none;
+}
+.apar-fila.arrastrando {
+  opacity: .9; border-color: var(--acento);
+  box-shadow: var(--shadow-acento);
+}
+.apar-asa {
+  cursor: grab; color: var(--t3); padding: .3rem .1rem; flex-shrink: 0;
+  /* Área de toque cómoda en el celular sin agrandar la fila. */
+  min-width: 28px; text-align: center;
+}
+.apar-asa:active { cursor: grabbing; }
+.apar-puesto {
+  width: 26px; flex-shrink: 0; text-align: center;
+  font-variant-numeric: tabular-nums; font-weight: 700; color: var(--t3);
+  font-size: .82rem;
+}
+.apar-foto {
+  width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
+  object-position: center 20%; flex-shrink: 0;
+}
+.apar-nombre {
+  display: flex; flex-direction: column; min-width: 0; flex: 1;
+  font-size: .86rem; font-weight: 600; color: var(--t1);
+}
+.apar-nombre small { font-weight: 400; font-size: .72rem; color: var(--t3); }
+
+@media (max-width: 640px) {
+  .apar-barra { flex-direction: column; align-items: stretch; }
+  .apar-barra > div { justify-content: stretch; }
+  .apar-barra > div .btn { flex: 1; justify-content: center; }
+  .apar-campos { grid-template-columns: 1fr; }
+  .apar-foto { display: none; }   /* el nombre es lo que se busca al ordenar */
+}
