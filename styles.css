@@ -612,16 +612,38 @@ p  { line-height: 1.7; color: var(--t2); }
   .gal-section { padding: 2rem 0 3rem; }
   .gal-header  { padding: 0 1.25rem; margin-bottom: 1rem; }
   .gal-title   { font-size: 1.4rem; }
+  /* 66vw y no 52vw: a dos columnas la tarjeta salía casi cuadrada (186x195) y
+     con el mismo texto que en escritorio. El bloque de texto ocupaba el 88%
+     de la tarjeta y la cara del agente quedaba detrás de las letras. Más alta
+     y con menos texto, la foto vuelve a ser lo que se ve. */
   .gal-grid {
     grid-template-columns: 1fr 1fr;
-    grid-auto-rows: 52vw;
+    grid-auto-rows: 66vw;
     height: auto;
     max-height: none;
     gap: 4px;
   }
-  .gal-item { height: 52vw; min-height: unset; max-height: unset; }
+  .gal-item { height: 66vw; min-height: unset; max-height: unset; }
   .gal-img { object-position: center 20%; }
   .gal-name { font-size: .88rem; }
+
+  /* Todo el texto junto, abajo a la izquierda, sin invadir el retrato. */
+  .gal-info { padding: .6rem .7rem .55rem; gap: .1rem; }
+  /* Los ramos se van: eran dos renglones de pastillas, el bloque más alto de
+     la tarjeta. Están en el directorio y en el perfil, que es donde se
+     comparan. Aquí manda la foto y el nombre. */
+  .gal-info .ag-ramos { display: none; }
+  /* «Ver perfil» solo aparecía en hover, que en un teléfono no existe: ocupaba
+     su renglón sin llegar a leerse nunca. La tarjeta entera ya es un enlace. */
+  .gal-info .gal-ver { display: none; }
+  .gal-info .ag-meta { font-size: .68rem; margin-top: 0; }
+  .gal-info .gal-status { font-size: .62rem; }
+
+  /* El velo puede arrancar más abajo: hay menos texto que proteger. */
+  .gal-item::before {
+    background: linear-gradient(to top,
+      rgba(0,0,0,.86) 0%, rgba(0,0,0,.45) 22%, transparent 48%);
+  }
 }
 /* ────────────────────────────────────────────────────────── */
 .section-head {
