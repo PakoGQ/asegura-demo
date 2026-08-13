@@ -569,7 +569,7 @@ p  { line-height: 1.7; color: var(--t2); }
 
 /* `.gal-status` se retiró: el estado de la agenda ya no es una línea gris
    dentro del texto, sino el distintivo verde/rojo de arriba a la derecha
-   (busca «.gal-estado»). Se borran también sus reglas para no dejar CSS
+   (busca «.estado-agenda»). Se borran también sus reglas para no dejar CSS
    apuntando a una clase que el JS ya no escribe. */
 .gal-dot {
   width: 6px; height: 6px;
@@ -631,7 +631,8 @@ p  { line-height: 1.7; color: var(--t2); }
   .gal-info .gal-ver { display: none; }
   .gal-info .ag-meta { font-size: .68rem; margin-top: 0; }
   /* El distintivo de agenda se aprieta un poco: la tarjeta mide ~178px. */
-  .gal-estado { top: .4rem; right: .4rem; padding: .26rem .5rem; font-size: .66rem; }
+  .estado-agenda--sobrefoto { top: .4rem; right: .4rem; }
+  .estado-agenda { padding: .26rem .5rem; font-size: .66rem; }
 
   /* El velo puede arrancar más abajo: hay menos texto que proteger. */
   .gal-item::before {
@@ -7449,19 +7450,25 @@ details.faq-item[open] .faq-a {
 /* ── Tarjeta de agente en la galería ──────────────────────────────────────── */
 .gal-item { display: block; text-decoration: none; color: inherit; }
 
-/* ── Estado de la agenda, arriba a la derecha ──────────────────────────────
-   Va como hijo directo de `.gal-item` y NO dentro de `.gal-info`: esta última
-   es `position:absolute` pegada abajo, así que un absolute dentro de ella se
-   posicionaría contra ella y no contra la foto.
+/* ── Estado de la agenda ───────────────────────────────────────────────────
+   UNA sola clase para los dos sitios donde aparece un agente: la galería de
+   la portada y el directorio. Misma esquina (arriba a la derecha), mismo
+   tamaño y los mismos dos colores, para que el visitante lo lea igual pase
+   de una pantalla a la otra.
 
-   Verde y rojo sólidos, no la escala suave del resto: es el dato que decide
-   si el visitante sigue mirando a este agente o pasa al siguiente, y antes
-   era una línea gris de 11px perdida entre el resto del texto.
+   Verde y rojo sólidos, no la escala suave del resto de pastillas: es el dato
+   que decide si el visitante sigue mirando a este agente o pasa al siguiente.
+   En la galería era una línea gris de 11px al final del texto y en el
+   directorio una pastilla clara arriba a la izquierda.
+
+   Va como hijo directo de la tarjeta y NUNCA dentro del bloque de texto:
+   ese bloque es `position:absolute` pegado abajo, así que un absolute dentro
+   de él se posicionaría contra él y no contra la foto.
    ────────────────────────────────────────────────────────────────────────── */
-.gal-estado {
-  position: absolute;
-  top: .55rem; right: .55rem;
-  z-index: 4;
+/* El aspecto va aquí y el anclaje en el modificador: así el mismo distintivo
+   sirve sobre una foto (galería, directorio) y dentro de una fila de pastillas
+   (el encabezado del perfil), sin duplicar los colores. */
+.estado-agenda {
   display: inline-flex; align-items: center; gap: .35rem;
   padding: .36rem .7rem;
   border-radius: 99px;
@@ -7469,11 +7476,16 @@ details.faq-item[open] .faq-a {
   color: #fff;
   letter-spacing: .01em;
   white-space: nowrap;
+}
+.estado-agenda--sobrefoto {
+  position: absolute;
+  top: .55rem; right: .55rem;
+  z-index: 4;
   box-shadow: 0 2px 8px rgba(0,0,0,.28);
 }
-.gal-estado.libre   { background: var(--green); }
-.gal-estado.ocupada { background: var(--red); }
-.gal-estado .gal-dot {
+.estado-agenda.libre   { background: var(--green); }
+.estado-agenda.ocupada { background: var(--red); }
+.estado-agenda .gal-dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: rgba(255,255,255,.92); flex-shrink: 0;
   box-shadow: none;
@@ -7688,13 +7700,21 @@ body { padding-top: var(--nav-h); }
 @media (max-width: 1180px) { .agentes-grid { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 960px)  { .agentes-grid { grid-template-columns: repeat(3, 1fr); } }
 
+/* Arriba a la izquierda quedan «Nuevo» y el ojo de vista rápida: la esquina
+   derecha es ahora del estado de la agenda, igual que en la galería.
+   El `max-width` reserva el ancho del distintivo de estado: sin él, en una
+   tarjeta de 223px el ojo más «Nuevo» (84px) más «Agenda ocupada» (142px) no
+   caben en la misma línea y el estado se montaba encima de «Nuevo». Con el
+   tope, «Nuevo» baja solo a un segundo renglón bajo el ojo. */
 .card-top-status {
   position: absolute; top: .6rem; left: .6rem;
-  display: flex; gap: .35rem; flex-wrap: wrap; z-index: 2;
+  max-width: calc(100% - 10.5rem);
+  display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; z-index: 2;
 }
 .card-quick {
-  position: absolute; top: .6rem; right: .6rem; z-index: 2;
-  width: 32px; height: 32px; border-radius: 50%;
+  /* Ya no es absolute: vive en la fila de arriba a la izquierda, junto a
+     «Nuevo». Antes ocupaba la esquina derecha, donde ahora va el estado. */
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
   border: 0; background: rgba(255,255,255,.92); color: var(--t2);
   cursor: pointer; opacity: 0; transition: var(--transition);
 }
@@ -7820,6 +7840,16 @@ body { padding-top: var(--nav-h); }
   .agentes-grid { grid-template-columns: 1fr 1fr; gap: .7rem; }
   .agente-card-body { padding: .7rem .75rem .8rem; }
   .agente-card-desc { display: none; }
+
+  /* A dos por fila la tarjeta mide 164px y el distintivo de estado se lleva
+     142: el ojo de vista rápida no cabe al lado y se montaba encima. Se
+     retira en móvil, donde además aporta poco: tocar la tarjeta abre el
+     perfil completo y se vuelve con el botón atrás. En escritorio sigue,
+     que es donde no perder el listado sí importa. */
+  .card-quick { display: none; }
+  /* «Nuevo» tampoco cabe al lado del estado (142px de una tarjeta de 164):
+     baja a su propio renglón, justo debajo. */
+  .card-top-status { top: 2.4rem; max-width: none; }
 
   /* A dos por fila la tarjeta mide ~164px: el nombre junto a la calificación
      se comía las dos terceras partes del nombre («Sofía Beltr…»). Aquí el

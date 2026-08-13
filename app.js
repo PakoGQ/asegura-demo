@@ -100,6 +100,18 @@ const estrellas = (n) => {
   return '★'.repeat(llenas) + '☆'.repeat(5 - llenas);
 };
 
+/* Distintivo de agenda: lo comparten la galería de la portada y el directorio.
+   Una sola función para que los dos digan lo mismo, con el mismo color y en
+   la misma esquina; antes cada pantalla lo pintaba a su manera («Disponible»
+   contra «Disponible hoy», pastilla clara contra línea gris). */
+const estadoAgenda = (a, sobreFoto = true) => {
+  const clases = ['estado-agenda', a.disponible ? 'libre' : 'ocupada'];
+  if (sobreFoto) clases.splice(1, 0, 'estado-agenda--sobrefoto');
+  return `<span class="${clases.join(' ')}">
+    <span class="gal-dot"></span>${a.disponible ? 'Disponible hoy' : 'Agenda ocupada'}
+  </span>`;
+};
+
 /* Distancia en km entre dos coordenadas (Haversine).
    Se calcula en el navegador: la ubicación del cliente no toca la base. */
 function distanciaKm(lat1, lng1, lat2, lng2) {
@@ -702,9 +714,7 @@ function buildGaleriaAgentes() {
     return `
       <a class="gal-item" href="perfil.html?a=${esc(a.slug)}">
         <img class="gal-img gal-active" src="${esc(a.foto)}" alt="${esc(a.nombre)}" loading="lazy" />
-        <span class="gal-estado ${a.disponible ? 'libre' : 'ocupada'}">
-          <span class="gal-dot"></span>${a.disponible ? 'Disponible hoy' : 'Agenda ocupada'}
-        </span>
+        ${estadoAgenda(a)}
         <div class="gal-info">
           <div class="gal-name">${esc(a.nombre)}
             ${a.verificado ? '<i class="fas fa-circle-check ag-ver" title="Cédula verificada"></i>' : ''}
@@ -1078,14 +1088,13 @@ function tarjetaAgente(a) {
     <article class="agente-card">
       <a class="agente-card-img-wrap" href="perfil.html?a=${esc(a.slug)}">
         <img class="agente-card-img" src="${esc(a.foto)}" alt="${esc(a.nombre)}" loading="lazy" />
+        ${estadoAgenda(a)}
         <div class="card-top-status">
-          ${a.disponible ? '<span class="pill pill-ok"><span class="punto"></span> Disponible</span>'
-                         : '<span class="pill pill-off">Agenda ocupada</span>'}
+          <button class="card-quick" data-quick="${esc(a.slug)}" aria-label="Vista rápida de ${esc(a.nombre)}">
+            <i class="fas fa-eye"></i>
+          </button>
           ${a.es_nuevo ? '<span class="pill pill-acento">Nuevo</span>' : ''}
         </div>
-        <button class="card-quick" data-quick="${esc(a.slug)}" aria-label="Vista rápida de ${esc(a.nombre)}">
-          <i class="fas fa-eye"></i>
-        </button>
         <div class="agente-card-sobrefoto">
           <div class="agente-card-sf-nombre">
             <span class="agente-card-sf-n">${esc(a.nombre)}${a.verificado
@@ -1427,8 +1436,7 @@ function plantillaPerfil(a, resenas) {
       <img class="pf-foto" src="${esc(a.foto)}" alt="${esc(a.nombre)}" />
       <div class="pf-encabezado">
         <div class="pf-pills">
-          ${a.disponible ? '<span class="pill pill-ok"><span class="punto"></span> Disponible hoy</span>'
-                         : '<span class="pill pill-off">Agenda ocupada</span>'}
+          ${estadoAgenda(a, false)}
           ${a.verificado ? '<span class="pill pill-acento"><i class="fas fa-circle-check"></i> Cédula verificada</span>' : ''}
           ${a.top10 ? '<span class="pill pill-acento"><i class="fas fa-award"></i> Top del equipo</span>' : ''}
         </div>
