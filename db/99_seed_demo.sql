@@ -30,7 +30,26 @@ declare
   u1 uuid; u2 uuid;
   a1 uuid; a2 uuid; a3 uuid; a4 uuid;
   id_cli  uuid;
+  vinculos jsonb;
 begin
+  -- ── Se guardan los accesos ya vinculados ─────────────────────────────────
+  -- Este archivo borra y recrea el equipo demo. Sin esto, cada corrida dejaba
+  -- a todo el mundo fuera de su panel: la fila se recreaba con el
+  -- `auth_user_id` del UUID de ejemplo de arriba, que no existe en auth.users,
+  -- así que entraba NULL. El síntoma es desconcertante porque el login sí
+  -- funciona —Auth valida la contraseña— pero el panel responde «tu cuenta no
+  -- está dada de alta en ningún equipo».
+  --
+  -- Pasó de verdad el 12-ago-2026, al sembrar los 30 agentes.
+  --
+  -- Se guarda correo → auth_user_id y se restaura al final. Quien ya tenía
+  -- acceso lo conserva; quien no, sigue dependiendo de vincular_director.sql
+  -- o vincular_agente.sql, como antes.
+  select coalesce(jsonb_object_agg(email, auth_user_id), '{}'::jsonb)
+    into vinculos
+    from public.usuarios
+   where email like '%@demo.mx' and auth_user_id is not null;
+
   -- ── Limpieza ─────────────────────────────────────────────────────────────
   -- Las tablas de cartera cuelgan de `usuarios` con `on delete restrict`, no
   -- con cascade: borrar un agente que ya tiene pólizas es un accidente, no una
@@ -103,6 +122,15 @@ begin
     (null, 'Tomás Bribiesca', 'tomas.bribiesca@demo.mx', '+523310000029', 'agente', id_dir),
     (null, 'Lucía Arriaga', 'lucia.arriaga@demo.mx', '+523310000030', 'agente', id_dir),
     (null, 'Javier Zepeda', 'javier.zepeda@demo.mx', '+523310000031', 'agente', id_dir);
+
+  -- ── Se devuelven los accesos que ya existían ─────────────────────────────
+  -- Va aquí, antes de las fichas, porque `agentes.usuario_id` ya apunta a
+  -- estas filas y así el vínculo está puesto antes de que nadie lo consulte.
+  update public.usuarios u
+     set auth_user_id = (vinculos ->> u.email)::uuid
+   where u.email like '%@demo.mx'
+     and u.auth_user_id is null
+     and vinculos ? u.email;
 
   -- ── Fichas públicas ──────────────────────────────────────────────────────
   insert into public.agentes
