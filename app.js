@@ -702,6 +702,9 @@ function buildGaleriaAgentes() {
     return `
       <a class="gal-item" href="perfil.html?a=${esc(a.slug)}">
         <img class="gal-img gal-active" src="${esc(a.foto)}" alt="${esc(a.nombre)}" loading="lazy" />
+        <span class="gal-estado ${a.disponible ? 'libre' : 'ocupada'}">
+          <span class="gal-dot"></span>${a.disponible ? 'Disponible hoy' : 'Agenda ocupada'}
+        </span>
         <div class="gal-info">
           <div class="gal-name">${esc(a.nombre)}
             ${a.verificado ? '<i class="fas fa-circle-check ag-ver" title="Cédula verificada"></i>' : ''}
@@ -712,10 +715,6 @@ function buildGaleriaAgentes() {
             · ${estrellas(a.calificacion)}
           </div>
           <div class="ag-ramos">${ramos}</div>
-          <div class="gal-status">
-            <span class="gal-dot ${a.disponible ? '' : 'off'}"></span>
-            <span>${a.disponible ? 'Disponible hoy' : 'Con agenda ocupada'}</span>
-          </div>
           <span class="gal-ver">Ver perfil <i class="fas fa-arrow-right" style="font-size:.6rem"></i></span>
         </div>
       </a>`;
