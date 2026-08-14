@@ -2246,6 +2246,10 @@ async function initPanelDirector() {
     b.addEventListener('click', () => ir(b.dataset.sec));
   });
 
+  // En móvil la barra lateral se oculta y el menú inferior solo lleva cuatro
+  // secciones; «Más» abre el resto.
+  initMasSecciones(ir);
+
   if (sesion.demo) {
     // Fuera del grid de .admin-layout: si se inserta dentro, ocupa una celda
     // y empuja el contenido a la fila siguiente, con el ancho del sidebar.
@@ -3147,6 +3151,10 @@ async function initPanelAgente() {
     if (b.tagName === 'A') return;
     b.addEventListener('click', () => ir(b.dataset.sec));
   });
+
+  // En móvil la barra lateral se oculta y el menú inferior solo lleva cuatro
+  // secciones; «Más» abre el resto.
+  initMasSecciones(ir);
 
   if (sesion.demo) {
     // Fuera del grid, por la misma razón que en el panel del Director.
@@ -6549,4 +6557,74 @@ async function limpiarOrden(btn) {
   } finally {
     btn.disabled = false;
   }
+}
+
+/* ===========================================================================
+   32. «Más» — el resto de secciones del panel en móvil
+
+   Los dos paneles tienen 10-11 secciones en la barra lateral, pero esa barra
+   se oculta por debajo de 900px y el menú inferior solo lleva cuatro. Las
+   demás quedaban inalcanzables desde el celular: en el panel del Director,
+   siete; en el del Agente, seis — y el agente trabaja desde el teléfono todo
+   el día.
+
+   La hoja se construye LEYENDO la barra lateral, que sigue en el DOM aunque
+   el CSS la oculte. Así no hay una segunda lista que mantener: al añadir una
+   sección al menú lateral aparece sola aquí.
+   =========================================================================== */
+function initMasSecciones(ir) {
+  const btn = $('[data-mas]');
+  if (!btn) return;
+
+  const cerrar = () => {
+    const h = $('#panelMas');
+    if (h) h.remove();
+    btn.classList.remove('activo');
+  };
+
+  btn.addEventListener('click', () => {
+    if ($('#panelMas')) { cerrar(); return; }
+
+    const items = $$('.admin-nav-item[data-sec], .agente-nav-item[data-sec]');
+    const enElMenuInferior = new Set(
+      $$('.panel-bottom-nav-item[data-sec]').map((b) => b.dataset.sec));
+
+    const hoja = document.createElement('div');
+    hoja.id = 'panelMas';
+    hoja.className = 'panel-mas';
+    hoja.innerHTML = `
+      <div class="panel-mas-fondo"></div>
+      <div class="panel-mas-hoja" role="dialog" aria-label="Más secciones">
+        <div class="panel-mas-asa"></div>
+        <div class="panel-mas-lista">
+          ${items.map((b) => {
+            const icono = b.querySelector('i');
+            // El texto del botón sin el número del distintivo pendiente.
+            const txt = [...b.childNodes]
+              .filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+            const badge = b.querySelector('.badge');
+            const pend = badge && badge.textContent.trim();
+            return `<button data-ir="${esc(b.dataset.sec)}"
+                       class="panel-mas-item${b.classList.contains('activo') ? ' activo' : ''}
+                              ${enElMenuInferior.has(b.dataset.sec) ? ' ya-abajo' : ''}">
+                      <i class="${icono ? icono.className : 'fas fa-circle'}"></i>
+                      <span>${esc(txt)}</span>
+                      ${pend ? `<span class="badge">${esc(pend)}</span>` : ''}
+                    </button>`;
+          }).join('')}
+        </div>
+      </div>`;
+    document.body.appendChild(hoja);
+    btn.classList.add('activo');
+
+    hoja.addEventListener('click', (e) => {
+      if (e.target.closest('.panel-mas-fondo')) { cerrar(); return; }
+      const b = e.target.closest('[data-ir]');
+      if (!b) return;
+      cerrar();
+      ir(b.dataset.ir);
+    });
+  });
+
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar(); });
 }

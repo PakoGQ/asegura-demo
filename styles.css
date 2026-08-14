@@ -8940,3 +8940,58 @@ a.panel-marca:hover .logo-img { opacity: .82; transition: var(--transition); }
   .apar-campos { grid-template-columns: 1fr; }
   .apar-foto { display: none; }   /* el nombre es lo que se busca al ordenar */
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   «Más» — hoja con el resto de secciones del panel, solo en móvil
+   ═══════════════════════════════════════════════════════════════════════════ */
+.panel-mas { position: fixed; inset: 0; z-index: 3000; }
+.panel-mas-fondo {
+  position: absolute; inset: 0;
+  background: rgba(8,18,32,.45);
+  animation: panelMasFondo .18s ease;
+}
+@keyframes panelMasFondo { from { opacity: 0 } to { opacity: 1 } }
+
+.panel-mas-hoja {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--card);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  box-shadow: 0 -8px 40px rgba(8,18,32,.28);
+  /* Deja libre el menú inferior, que sigue debajo. */
+  padding: .5rem .75rem calc(64px + env(safe-area-inset-bottom, 0px));
+  max-height: 78vh; overflow-y: auto;
+  animation: panelMasSube .2s cubic-bezier(.2,.8,.3,1);
+}
+@keyframes panelMasSube { from { transform: translateY(100%) } to { transform: none } }
+
+/* El asa no hace nada: es la señal de que esto se puede cerrar. */
+.panel-mas-asa {
+  width: 38px; height: 4px; border-radius: 99px;
+  background: var(--border-h); margin: .25rem auto .6rem;
+}
+
+.panel-mas-lista { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+.panel-mas-item {
+  display: flex; align-items: center; gap: .55rem;
+  padding: .7rem .6rem;
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--surface); color: var(--t1);
+  font: inherit; font-size: .82rem; font-weight: 600; text-align: left;
+  cursor: pointer; min-height: 46px;
+}
+.panel-mas-item i { width: 18px; text-align: center; color: var(--acento); flex-shrink: 0; }
+.panel-mas-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-mas-item .badge {
+  margin-left: auto; flex-shrink: 0;
+  background: var(--acento); color: #fff;
+  border-radius: 99px; padding: .05rem .4rem; font-size: .68rem;
+}
+.panel-mas-item.activo { border-color: var(--acento); background: #fff0eb; color: var(--acento-dk); }
+/* Las que ya están en el menú inferior se enseñan igual —para no obligar a
+   recordar cuáles están dónde— pero apagadas, que la fila de abajo es el
+   camino corto. */
+.panel-mas-item.ya-abajo { opacity: .55; }
+.panel-mas-item:active { transform: scale(.985); }
+
+@media (min-width: 901px) { .panel-mas { display: none; } }
+@media (max-width: 360px) { .panel-mas-lista { grid-template-columns: 1fr; } }
