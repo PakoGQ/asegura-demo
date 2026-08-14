@@ -9136,3 +9136,37 @@ a.panel-marca:hover .logo-img { opacity: .82; transition: var(--transition); }
   .apar-orden.es-mosaico { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
   .apar-ficha-foto { width: 50px; height: 50px; }
 }
+
+/* ── Quién sale en la portada ─────────────────────────────────────────────── */
+.apar-portada {
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--surface); padding: .7rem .8rem; margin-bottom: .8rem;
+}
+.apar-aleatorio { display: flex; align-items: flex-start; gap: .6rem; cursor: pointer; }
+.apar-aleatorio input { margin-top: .15rem; width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--acento); }
+.apar-aleatorio strong { display: block; font-size: .88rem; color: var(--t1); }
+.apar-aleatorio small { display: block; margin-top: .15rem; font-size: .74rem; line-height: 1.45; color: var(--t3); }
+.apar-cuenta {
+  margin: .55rem 0 0; padding-top: .5rem; border-top: 1px solid var(--border);
+  font-size: .78rem; font-weight: 600; color: var(--t2);
+}
+.apar-cuenta.lleno { color: var(--acento-dk); }
+
+/* La casilla de cada agente. Área de toque cómoda sin agrandar la fila. */
+.apar-check { display: inline-flex; align-items: center; padding: .25rem; cursor: pointer; flex-shrink: 0; }
+.apar-check input { width: 18px; height: 18px; accent-color: var(--acento); cursor: pointer; }
+.apar-check input:disabled { cursor: not-allowed; opacity: .4; }
+
+/* Quien está en portada se distingue de un vistazo. */
+.apar-fila.en-portada,
+.apar-ficha.en-portada { border-color: var(--acento); background: #fff8f6; }
+
+/* En mosaico la casilla va en la esquina, bajo el asa. */
+.apar-ficha .apar-check { position: absolute; top: 1.55rem; left: .3rem; }
+.apar-ficha.en-portada::after {
+  content: 'EN PORTADA';
+  position: absolute; bottom: .3rem; left: 50%; transform: translateX(-50%);
+  font-size: .58rem; font-weight: 700; letter-spacing: .06em;
+  color: var(--acento-dk);
+}
+.apar-ficha.en-portada { padding-bottom: 1.1rem; }

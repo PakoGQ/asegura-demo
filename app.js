@@ -777,11 +777,48 @@ function reiniciarCarrusel() {
 /* ===========================================================================
    5. Galería de agentes en la portada
    =========================================================================== */
+/* Generador con semilla. Hace falta uno propio porque `Math.random()` daría
+   una portada distinta en cada recarga y a cada visitante: la rotación tiene
+   que ser la misma para todos durante la hora, y cambiar al pasar a la
+   siguiente. Es un mulberry32, lo más corto que da una secuencia decente. */
+function azarConSemilla(semilla) {
+  let s = semilla >>> 0;
+  return () => {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* Los 6 de la galería de la portada.
+
+   Si el Director marcó a alguien en Apariencia, salen los suyos. Si no marcó
+   a nadie —que es como está de fábrica— rotan solos: 6 al azar, los mismos
+   para todo el mundo durante una hora, distintos a la siguiente. Así los 30
+   agentes van pasando por la portada en vez de quedarse siempre los primeros
+   seis del orden. */
+function agentesDePortada() {
+  const elegidos = AGENTES.filter((a) => a.en_portada);
+  if (elegidos.length) return elegidos.slice(0, 6);
+
+  // La semilla es la hora desde 1970: cambia sola cada 60 minutos y no hace
+  // falta guardar nada ni programar ninguna tarea.
+  const hora = Math.floor(Date.now() / 3600000);
+  const rnd = azarConSemilla(hora);
+  const baraja = AGENTES.slice();
+  for (let i = baraja.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [baraja[i], baraja[j]] = [baraja[j], baraja[i]];
+  }
+  return baraja.slice(0, 6);
+}
+
 function buildGaleriaAgentes() {
   const el = $('#agenteGallery');
   if (!el) return;
 
-  const lista = AGENTES.slice(0, 6);
+  const lista = agentesDePortada();
   const cuenta = $('#statsCount');
   if (cuenta) cuenta.textContent = AGENTES.length;
   if (!lista.length) return;
@@ -2483,6 +2520,22 @@ function seccionApariencia() {
     </div>
 
     <p class="apar-nota" id="aparNotaOrden"></p>
+
+    <!-- Quién sale en la galería de la portada. El modo no se guarda en
+         ningún sitio: si no hay nadie palomeado, rota sola. -->
+    <div class="apar-portada" id="aparPortada">
+      <label class="apar-aleatorio">
+        <input type="checkbox" id="aparAleatorio" />
+        <span>
+          <strong>Aleatorio cada hora</strong>
+          <small>Van rotando los 30 agentes: seis distintos cada hora, los
+                 mismos para todo el que entre. Al marcarlo se borra la
+                 selección de abajo.</small>
+        </span>
+      </label>
+      <p class="apar-cuenta" id="aparCuenta"></p>
+    </div>
+
     <ol class="apar-orden" id="aparOrden"></ol>
   </section>`;
 }
@@ -6476,24 +6529,68 @@ function pintarOrdenAgentes() {
   const ol = $('#aparOrden');
   if (!ol) return;
   ol.className = 'apar-orden' + (VISTA_ORDEN === 'mosaico' ? ' es-mosaico' : '');
+  const elegidos = ORDEN_EDIT.filter((x) => x.en_portada).length;
+  // Con seis ya elegidos, las casillas libres se bloquean: es más claro que
+  // dejar palomear y soltar un error después.
+  const lleno = elegidos >= MAX_PORTADA;
+
+  const casilla = (a) => `
+    <label class="apar-check" title="${a.en_portada ? 'Quitar de la portada' : 'Poner en la portada'}">
+      <input type="checkbox" data-portada="${esc(a.id)}"
+             ${a.en_portada ? 'checked' : ''}
+             ${!a.en_portada && lleno ? 'disabled' : ''} />
+    </label>`;
+
   ol.innerHTML = ORDEN_EDIT.map((a, i) => (VISTA_ORDEN === 'mosaico' ? `
-    <li class="apar-ficha" draggable="false" data-id="${esc(a.id)}">
+    <li class="apar-ficha${a.en_portada ? ' en-portada' : ''}" draggable="false" data-id="${esc(a.id)}">
       <span class="apar-asa" title="Arrastra para mover"><i class="fas fa-grip-vertical"></i></span>
       <span class="apar-puesto">${i + 1}</span>
+      ${casilla(a)}
       <img class="apar-ficha-foto" src="${esc(a.foto)}" alt="" loading="lazy" />
       <span class="apar-ficha-nombre">${esc(a.nombre)}</span>
       <span class="apar-ficha-meta">${esc(a.zona || '')} · ${Number(a.calificacion).toFixed(1)} ★</span>
       ${a.es_destacado ? '<span class="pill pill-acento pill-sm">Destacado</span>' : ''}
     </li>` : `
-    <li class="apar-fila" draggable="false" data-id="${esc(a.id)}">
+    <li class="apar-fila${a.en_portada ? ' en-portada' : ''}" draggable="false" data-id="${esc(a.id)}">
       <span class="apar-asa" title="Arrastra para mover"><i class="fas fa-grip-vertical"></i></span>
       <span class="apar-puesto">${i + 1}</span>
+      ${casilla(a)}
       <img class="apar-foto" src="${esc(a.foto)}" alt="" loading="lazy" />
       <span class="apar-nombre">${esc(a.nombre)}
         <small>${esc(a.zona || '')} · ${Number(a.calificacion).toFixed(1)} ★</small>
       </span>
       ${a.es_destacado ? '<span class="pill pill-acento pill-sm">Destacado</span>' : ''}
     </li>`)).join('');
+
+  pintarEstadoPortada();
+}
+
+const MAX_PORTADA = 6;
+
+/* La casilla de arriba y el contador. El modo se DEDUCE: sin nadie elegido,
+   la portada rota sola. No hay una bandera aparte que pueda contradecir a la
+   lista. */
+/* Bloquea o libera las casillas sin repintar la lista, y refresca el contador.
+   Se llama en cada palomeo. */
+function refrescarTopePortada() {
+  const lleno = ORDEN_EDIT.filter((a) => a.en_portada).length >= MAX_PORTADA;
+  $$('[data-portada]').forEach((c) => { c.disabled = lleno && !c.checked; });
+  pintarEstadoPortada();
+}
+
+function pintarEstadoPortada() {
+  const elegidos = ORDEN_EDIT.filter((a) => a.en_portada);
+  const chk = $('#aparAleatorio');
+  const cuenta = $('#aparCuenta');
+  if (chk) chk.checked = elegidos.length === 0;
+  if (cuenta) {
+    cuenta.textContent = elegidos.length === 0
+      ? 'Ahora mismo la portada rota sola cada hora.'
+      : `${elegidos.length} de ${MAX_PORTADA} elegidos` +
+        (elegidos.length >= MAX_PORTADA
+          ? ' — para cambiar a alguien, quita a otro primero.' : '.');
+    cuenta.classList.toggle('lleno', elegidos.length >= MAX_PORTADA);
+  }
 }
 
 /* Acomoda la lista por un criterio. Es un punto de partida, no una decisión:
@@ -6738,6 +6835,47 @@ function activarApariencia() {
       pintarOrdenAgentes();
     });
   }
+
+  // Palomear a un agente para la portada
+  const olPortada = $('#aparOrden');
+  if (olPortada) {
+    olPortada.addEventListener('change', (e) => {
+      const chk = e.target.closest('[data-portada]');
+      if (!chk) return;
+      const a = ORDEN_EDIT.find((x) => String(x.id) === chk.dataset.portada);
+      if (!a) return;
+      if (chk.checked && ORDEN_EDIT.filter((x) => x.en_portada).length >= MAX_PORTADA) {
+        chk.checked = false;
+        showToast(`La portada admite ${MAX_PORTADA}. Quita a alguno primero.`, 'error');
+        return;
+      }
+      a.en_portada = chk.checked;
+      // Se actualiza en sitio en vez de repintar los 30: repintar mueve el
+      // scroll y hace perder de vista la casilla que se acaba de tocar, que
+      // con treinta agentes en el celular es exasperante.
+      const fila = chk.closest('.apar-fila, .apar-ficha');
+      if (fila) fila.classList.toggle('en-portada', chk.checked);
+      refrescarTopePortada();
+    });
+  }
+
+  // «Aleatorio cada hora»: marcarlo borra la selección; desmarcarlo no elige
+  // por su cuenta, que sería decidir por el Director.
+  const chkAleatorio = $('#aparAleatorio');
+  if (chkAleatorio) {
+    chkAleatorio.addEventListener('change', () => {
+      if (chkAleatorio.checked) {
+        const habia = ORDEN_EDIT.filter((a) => a.en_portada).length;
+        ORDEN_EDIT.forEach((a) => { a.en_portada = false; });
+        pintarOrdenAgentes();
+        if (habia) showToast('Selección borrada. La portada rotará sola.');
+      } else {
+        // Sin nadie elegido no hay modo manual posible: se vuelve a marcar.
+        pintarEstadoPortada();
+        showToast('Palomea a los agentes que quieras fijar en la portada.');
+      }
+    });
+  }
 }
 
 async function guardarHero(btn) {
@@ -6785,14 +6923,25 @@ async function guardarOrden(btn) {
   const antes = btn.innerHTML;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
   try {
+    // Primero se quita a TODOS de la portada y luego se marca a los elegidos.
+    // Al revés, marcar al séptimo antes de haber liberado hueco choca con el
+    // tope de la base, aunque el resultado final sí quepa.
+    const { error: eLimpia } = await sbClient.from('agentes')
+      .update({ en_portada: false }).eq('en_portada', true);
+    if (eLimpia) throw eLimpia;
+
     // Uno por uno: `upsert` sobre la vista no vale y un update masivo pediría
     // una función en la base. Son 30 filas, se nota poco.
     for (let i = 0; i < ORDEN_EDIT.length; i++) {
       const { error } = await sbClient.from('agentes')
-        .update({ orden_publico: i + 1 }).eq('id', ORDEN_EDIT[i].id);
+        .update({ orden_publico: i + 1, en_portada: !!ORDEN_EDIT[i].en_portada })
+        .eq('id', ORDEN_EDIT[i].id);
       if (error) throw error;
     }
-    showToast('Orden guardado. Así saldrán en la portada y el directorio.');
+    const enPortada = ORDEN_EDIT.filter((a) => a.en_portada).length;
+    showToast(enPortada
+      ? `Guardado. En la portada saldrán los ${enPortada} que elegiste.`
+      : 'Guardado. La portada seguirá rotando sola cada hora.');
   } catch (e) {
     showToast('No se pudo guardar el orden: ' + e.message, 'error');
   } finally {
