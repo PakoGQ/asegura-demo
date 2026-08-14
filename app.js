@@ -6401,7 +6401,20 @@ async function cargarApariencia() {
   // El orden arranca como está saliendo el sitio ahora mismo, para que el
   // Director mueva desde lo que ya ve y no desde una lista en otro orden.
   ORDEN_EDIT = AGENTES.slice();
+
+  // «Acomodar por» ofrece criterios de cartera (prima, pólizas, seguimiento) y
+  // esos datos viven en `v_resumen_agente`, que hasta ahora solo se cargaba al
+  // entrar en Equipo. Sin ellos `carteraDe()` devuelve ceros, todos empatan y
+  // el orden no cambiaba — pero el aviso decía «Acomodados» igual.
+  if (window.sbClient && !EQUIPO.cargado) {
+    try { await cargarEquipo(); } catch (e) {
+      console.warn('No se pudo leer la cartera del equipo:', e.message);
+    }
+  }
 }
+
+/* Criterios que no significan nada sin los datos de cartera. */
+const CRITERIOS_DE_CARTERA = ['prima', 'prima_asc', 'polizas', 'abandono'];
 
 /* Cuál de los banners se está mirando en la vista previa de arriba. */
 let BANNER_ACTIVO = 0;
@@ -6488,6 +6501,20 @@ function pintarOrdenAgentes() {
 function acomodarPor(clave) {
   const nota = $('#aparNotaOrden');
   if (!clave) { if (nota) nota.textContent = ''; return; }
+
+  // Un criterio de cartera sin datos de cartera ordenaría ceros contra ceros:
+  // la lista se quedaría igual y el aviso diría que se acomodó. Mejor decir
+  // qué falta que dejar al Director mirando una lista que no se movió.
+  if (CRITERIOS_DE_CARTERA.includes(clave) && !EQUIPO.filas.length) {
+    if (nota) {
+      nota.textContent = EQUIPO.error
+        ? `No se pudieron leer los datos de cartera (${EQUIPO.error}).`
+        : 'Todavía no hay pólizas registradas, así que este criterio no puede '
+          + 'ordenar nada. Prueba con calificación, citas o nombre.';
+    }
+    showToast('Ese criterio necesita datos de cartera que aún no hay.', 'error');
+    return;
+  }
 
   if (clave === 'destacados') {
     ORDEN_EDIT.sort((a, b) => (b.es_destacado ? 1 : 0) - (a.es_destacado ? 1 : 0)
