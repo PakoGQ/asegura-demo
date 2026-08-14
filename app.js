@@ -2461,6 +2461,28 @@ function seccionApariencia() {
           <i class="fas fa-floppy-disk"></i> Guardar</button>
       </div>
     </div>
+
+    <!-- Acomodo rápido + cómo se ve la lista. El selector deja la lista
+         ordenada por un criterio y desde ahí se ajusta a mano; no guarda
+         nada por sí solo. -->
+    <div class="apar-herramientas">
+      <label class="apar-ordenar">
+        <span>Acomodar por</span>
+        <select id="aparAcomodar" class="dir-select">
+          <option value="">— elige un criterio —</option>
+          ${ORDENES_PANEL.map((o) => `<option value="${o.clave}">${esc(o.txt)}</option>`).join('')}
+          <option value="destacados">Destacados primero</option>
+        </select>
+      </label>
+      <div class="apar-vista" role="group" aria-label="Cómo ver la lista">
+        <button class="apar-vista-btn activo" data-vista="lista" title="Lista">
+          <i class="fas fa-list"></i> Lista</button>
+        <button class="apar-vista-btn" data-vista="mosaico" title="Mosaico">
+          <i class="fas fa-grip"></i> Mosaico</button>
+      </div>
+    </div>
+
+    <p class="apar-nota" id="aparNotaOrden"></p>
     <ol class="apar-orden" id="aparOrden"></ol>
   </section>`;
 }
@@ -6433,10 +6455,23 @@ function pintarSlidesHero() {
   pintarPreviaBanner();
 }
 
+/* 'lista' o 'mosaico'. En mosaico se ven las caras, que es como el Director
+   reconoce a su equipo; en lista caben más de un vistazo. */
+let VISTA_ORDEN = 'lista';
+
 function pintarOrdenAgentes() {
   const ol = $('#aparOrden');
   if (!ol) return;
-  ol.innerHTML = ORDEN_EDIT.map((a, i) => `
+  ol.className = 'apar-orden' + (VISTA_ORDEN === 'mosaico' ? ' es-mosaico' : '');
+  ol.innerHTML = ORDEN_EDIT.map((a, i) => (VISTA_ORDEN === 'mosaico' ? `
+    <li class="apar-ficha" draggable="false" data-id="${esc(a.id)}">
+      <span class="apar-asa" title="Arrastra para mover"><i class="fas fa-grip-vertical"></i></span>
+      <span class="apar-puesto">${i + 1}</span>
+      <img class="apar-ficha-foto" src="${esc(a.foto)}" alt="" loading="lazy" />
+      <span class="apar-ficha-nombre">${esc(a.nombre)}</span>
+      <span class="apar-ficha-meta">${esc(a.zona || '')} · ${Number(a.calificacion).toFixed(1)} ★</span>
+      ${a.es_destacado ? '<span class="pill pill-acento pill-sm">Destacado</span>' : ''}
+    </li>` : `
     <li class="apar-fila" draggable="false" data-id="${esc(a.id)}">
       <span class="apar-asa" title="Arrastra para mover"><i class="fas fa-grip-vertical"></i></span>
       <span class="apar-puesto">${i + 1}</span>
@@ -6445,7 +6480,28 @@ function pintarOrdenAgentes() {
         <small>${esc(a.zona || '')} · ${Number(a.calificacion).toFixed(1)} ★</small>
       </span>
       ${a.es_destacado ? '<span class="pill pill-acento pill-sm">Destacado</span>' : ''}
-    </li>`).join('');
+    </li>`)).join('');
+}
+
+/* Acomoda la lista por un criterio. Es un punto de partida, no una decisión:
+   deja el orden puesto y desde ahí se ajusta arrastrando. No guarda nada. */
+function acomodarPor(clave) {
+  const nota = $('#aparNotaOrden');
+  if (!clave) { if (nota) nota.textContent = ''; return; }
+
+  if (clave === 'destacados') {
+    ORDEN_EDIT.sort((a, b) => (b.es_destacado ? 1 : 0) - (a.es_destacado ? 1 : 0)
+                           || Number(b.calificacion) - Number(a.calificacion));
+    if (nota) nota.textContent = 'Los marcados como destacados van primero.';
+  } else {
+    // Se reutiliza el mismo comparador que Gestión de agentes, para que
+    // «mejor calificados» signifique lo mismo en las dos pantallas.
+    ordenarAgentesPanel(ORDEN_EDIT, clave);
+    const o = ORDENES_PANEL.find((x) => x.clave === clave);
+    if (nota) nota.textContent = o ? o.nota : '';
+  }
+  pintarOrdenAgentes();
+  showToast('Acomodados. Ajusta a mano lo que haga falta y guarda.');
 }
 
 /* Arrastre con eventos de puntero: el mismo código sirve para ratón y dedo.
@@ -6453,15 +6509,19 @@ function pintarOrdenAgentes() {
 function activarArrastre(ol) {
   let origen = null;
 
-  const filaEn = (y) => [...ol.children].find((li) => {
+  // En lista basta con la Y; en mosaico hay varias por renglón, así que se
+  // busca la tarjeta que contiene el punto en los dos ejes.
+  const filaEn = (x, y) => [...ol.children].find((li) => {
     const r = li.getBoundingClientRect();
-    return y >= r.top && y <= r.bottom;
+    return VISTA_ORDEN === 'mosaico'
+      ? (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
+      : (y >= r.top && y <= r.bottom);
   });
 
   ol.addEventListener('pointerdown', (e) => {
     const asa = e.target.closest('.apar-asa');
     if (!asa) return;                       // solo se arrastra desde el asa
-    origen = asa.closest('.apar-fila');
+    origen = asa.closest('.apar-fila, .apar-ficha');
     origen.classList.add('arrastrando');
     ol.setPointerCapture(e.pointerId);
     e.preventDefault();                     // sin esto el móvil hace scroll
@@ -6470,10 +6530,14 @@ function activarArrastre(ol) {
   ol.addEventListener('pointermove', (e) => {
     if (!origen) return;
     e.preventDefault();
-    const destino = filaEn(e.clientY);
+    const destino = filaEn(e.clientX, e.clientY);
     if (!destino || destino === origen) return;
     const r = destino.getBoundingClientRect();
-    const despues = e.clientY > r.top + r.height / 2;
+    // En mosaico el lado que decide es el horizontal: se suelta a la izquierda
+    // o a la derecha de la tarjeta, no arriba o abajo.
+    const despues = VISTA_ORDEN === 'mosaico'
+      ? e.clientX > r.left + r.width / 2
+      : e.clientY > r.top + r.height / 2;
     ol.insertBefore(origen, despues ? destino.nextSibling : destino);
   });
 
@@ -6633,6 +6697,20 @@ function activarApariencia() {
 
   const btnLimpiar = $('#aparLimpiarOrden');
   if (btnLimpiar) btnLimpiar.addEventListener('click', () => limpiarOrden(btnLimpiar));
+
+  const selAcomodar = $('#aparAcomodar');
+  if (selAcomodar) selAcomodar.addEventListener('change', () => acomodarPor(selAcomodar.value));
+
+  const vista = $('.apar-vista');
+  if (vista) {
+    vista.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-vista]');
+      if (!b) return;
+      VISTA_ORDEN = b.dataset.vista;
+      $$('.apar-vista-btn').forEach((x) => x.classList.toggle('activo', x === b));
+      pintarOrdenAgentes();
+    });
+  }
 }
 
 async function guardarHero(btn) {

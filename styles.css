@@ -9073,3 +9073,66 @@ a.panel-marca:hover .logo-img { opacity: .82; transition: var(--transition); }
   .apar-vacio-btns { flex-direction: column; }
   .apar-vacio-btns .btn { justify-content: center; }
 }
+
+/* ── Herramientas de la pestaña «Orden de los agentes» ───────────────────── */
+.apar-herramientas {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap; margin: .25rem 0 .6rem;
+}
+.apar-ordenar { display: flex; align-items: center; gap: .5rem; }
+.apar-ordenar > span { font-size: .78rem; font-weight: 600; color: var(--t2); }
+
+.apar-vista { display: inline-flex; border: 1px solid var(--border); border-radius: 99px; overflow: hidden; }
+.apar-vista-btn {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .38rem .75rem; border: 0; background: var(--card);
+  color: var(--t2); font: inherit; font-size: .78rem; font-weight: 600;
+  cursor: pointer;
+}
+.apar-vista-btn.activo { background: var(--acento); color: #fff; }
+
+/* La explicación del criterio elegido: el mismo texto que en Gestión de
+   agentes, para que «mejor calificados» signifique lo mismo en las dos. */
+.apar-nota {
+  margin: 0 0 .7rem; font-size: .78rem; line-height: 1.5; color: var(--t3);
+}
+.apar-nota:empty { display: none; }
+
+/* ── Mosaico ── */
+.apar-orden.es-mosaico {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: .55rem;
+}
+.apar-ficha {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center;
+  padding: .6rem .5rem .55rem;
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--card); text-align: center;
+  touch-action: none;   /* igual que en lista: el gesto es arrastrar, no scroll */
+}
+.apar-ficha.arrastrando { opacity: .9; border-color: var(--acento); box-shadow: var(--shadow-acento); }
+/* En mosaico el asa va en una esquina, no en una columna. */
+.apar-ficha .apar-asa { position: absolute; top: .3rem; left: .35rem; min-width: 0; }
+.apar-ficha .apar-puesto {
+  position: absolute; top: .3rem; right: .45rem;
+  width: auto; color: var(--acento); font-size: .78rem;
+}
+.apar-ficha-foto {
+  width: 62px; height: 62px; border-radius: 50%; object-fit: cover;
+  object-position: center 20%; margin: .5rem 0 .4rem;
+}
+.apar-ficha-nombre {
+  font-size: .82rem; font-weight: 700; color: var(--t1); line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+.apar-ficha-meta { font-size: .7rem; color: var(--t3); margin-top: .1rem; }
+.apar-ficha .pill { margin-top: .35rem; }
+
+@media (max-width: 640px) {
+  .apar-herramientas { flex-direction: column; align-items: stretch; }
+  .apar-ordenar { flex-direction: column; align-items: stretch; gap: .25rem; }
+  .apar-vista { align-self: flex-start; }
+  .apar-orden.es-mosaico { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+  .apar-ficha-foto { width: 50px; height: 50px; }
+}
