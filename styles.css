@@ -8995,3 +8995,71 @@ a.panel-marca:hover .logo-img { opacity: .82; transition: var(--transition); }
 
 @media (min-width: 901px) { .panel-mas { display: none; } }
 @media (max-width: 360px) { .panel-mas-lista { grid-template-columns: 1fr; } }
+
+/* ── Vista previa del banner, arriba de la sección ────────────────────────── */
+.apar-previa { margin-bottom: 1rem; }
+.apar-previa-cab {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  margin-bottom: .5rem;
+}
+.apar-previa-tag {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--t3);
+}
+.apar-previa-puntos { display: flex; gap: .3rem; margin-left: auto; }
+.apar-previa-punto {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--card);
+  color: var(--t2); font: inherit; font-size: .74rem; font-weight: 700;
+  cursor: pointer;
+}
+.apar-previa-punto.activo { background: var(--acento); border-color: var(--acento); color: #fff; }
+/* Un banner apagado se sigue pudiendo previsualizar, pero se marca. */
+.apar-previa-punto.apagado { opacity: .45; }
+
+/* El marco reproduce el hero real a escala: mismas clases, alto contenido. */
+.apar-previa-marco {
+  border: 1px solid var(--border); border-radius: var(--r-lg);
+  overflow: hidden; background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.apar-previa-marco .hero-slides { min-height: 0; }
+.apar-previa-slide { position: relative; }
+/* Se encoge el texto para que un hero de portada quepa en el panel sin que
+   parezca otra cosa: mismas proporciones, menos escala. */
+.apar-previa-marco .hs-inner { padding: 1.6rem 1.4rem; max-width: none; }
+.apar-previa-marco .hs-titulo { font-size: clamp(1.1rem, 2.6vw, 1.7rem); }
+.apar-previa-marco .hs-desc   { font-size: .82rem; margin-bottom: .9rem; }
+.apar-previa-marco .hs-label  { font-size: .62rem; }
+.apar-previa-marco .btn-lg    { padding: .5rem .9rem; font-size: .8rem; }
+
+.apar-previa-vacia {
+  border: 1px dashed var(--border); border-radius: var(--r-lg);
+  padding: 2rem 1rem; text-align: center; color: var(--t3);
+}
+.apar-previa-vacia i { font-size: 1.6rem; margin-bottom: .5rem; display: block; }
+.apar-previa-vacia p { margin: 0; font-size: .86rem; }
+
+/* La cabecera de cada banner es clicable para enfocarlo en la vista previa */
+.apar-slide-head[data-plegar] { cursor: pointer; }
+.apar-slide-head[data-plegar]:hover { background: var(--card-hover); }
+
+/* ── Subir imagen de fondo ── */
+.apar-etiqueta {
+  display: block; margin-bottom: .3rem;
+  font-size: .74rem; font-weight: 600; color: var(--t2);
+}
+.apar-subir { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.apar-subir-btn { cursor: pointer; margin: 0; }
+.apar-miniatura {
+  width: 72px; height: 46px; object-fit: cover;
+  border-radius: var(--r-sm); border: 1px solid var(--border); flex-shrink: 0;
+}
+.apar-ayuda { font-size: .7rem; color: var(--t3); }
+
+@media (max-width: 640px) {
+  .apar-previa-marco .hs-inner { padding: 1.1rem 1rem; }
+  .apar-subir { gap: .45rem; }
+  .apar-ayuda { flex-basis: 100%; }
+}

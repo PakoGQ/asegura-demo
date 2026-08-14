@@ -603,10 +603,13 @@ async function cargarHero() {
 /* Un slide armado desde el panel. Los tres fondos son los que ya existían en
    el CSS, para que lo que monte el Director se vea como el resto del sitio. */
 function slideConfigurado(s, activo) {
-  const clase = { marca: 'hs-marca', azul: 'hs-agenda', agente: 'hs-agente' }[s.fondo] || 'hs-marca';
-  // Un slide de tipo agente cuyo agente se ocultó o se borró se queda sin
-  // foto; se degrada al fondo de marca en vez de salir en negro.
-  const foto = s.fondo === 'agente' && s.agente_foto ? s.agente_foto : null;
+  const clase = { marca: 'hs-marca', azul: 'hs-agenda',
+                  agente: 'hs-agente', imagen: 'hs-agente' }[s.fondo] || 'hs-marca';
+  // Un banner de tipo agente cuyo agente se ocultó o se borró se queda sin
+  // foto; se degrada al fondo de marca en vez de salir en negro. Igual con una
+  // imagen propia que ya no esté.
+  const foto = (s.fondo === 'agente' && s.agente_foto) ? s.agente_foto
+             : (s.fondo === 'imagen' && s.imagen_url) ? s.imagen_url : null;
   const bg = foto ? ` style="background-image:url('${esc(foto)}')"` : '';
   const cls = foto ? clase : (clase === 'hs-agente' ? 'hs-marca' : clase);
 
@@ -2276,18 +2279,58 @@ let HERO_EDIT = [];      // los slides tal como se están editando
 let ORDEN_EDIT = [];     // los agentes en el orden que se está armando
 
 const FONDOS_HERO = {
-  marca:  { label: 'Claro con naranja', ayuda: 'El de la bienvenida' },
-  azul:   { label: 'Azul de marca',     ayuda: 'Texto en blanco' },
-  agente: { label: 'Foto de un agente', ayuda: 'Elige cuál abajo' },
+  marca:  { label: 'Claro con naranja' },
+  azul:   { label: 'Azul de marca' },
+  agente: { label: 'Foto de un agente' },
+  imagen: { label: 'Mi propia imagen' },
 };
+
+/* Límites del bucket `hero`, repetidos aquí para avisar antes de subir. La
+   validación de verdad la hace Supabase Storage (db/09_hero_imagen.sql): esta
+   solo evita esperar a que suban 8 MB para enterarse de que no caben. */
+const IMG_MAX_BYTES = 3 * 1024 * 1024;
+const IMG_TIPOS = ['image/jpeg', 'image/png', 'image/webp'];
+
+/* La vista previa: el banner tal como se verá en la portada, con las mismas
+   clases del hero real. Se pinta arriba y se actualiza mientras se escribe,
+   para que el Director no tenga que imaginarse el resultado ni abrir el sitio
+   en otra pestaña para comprobarlo. */
+function vistaPreviaBanner(s) {
+  const clase = { marca: 'hs-marca', azul: 'hs-agenda',
+                  agente: 'hs-agente', imagen: 'hs-agente' }[s.fondo] || 'hs-marca';
+  let fondo = '';
+  if (s.fondo === 'imagen' && s.imagen_url) fondo = s.imagen_url;
+  if (s.fondo === 'agente' && s.agente_id) {
+    const ag = AGENTES.find((a) => String(a.id) === String(s.agente_id));
+    if (ag) fondo = ag.foto;
+  }
+  const bg = fondo ? ` style="background-image:url('${esc(fondo)}')"` : '';
+  const cls = fondo ? clase : (clase === 'hs-agente' ? 'hs-marca' : clase);
+
+  return `
+    <div class="hero-slide ${cls} activa apar-previa-slide">
+      <div class="hs-bg"${bg}></div>
+      <div class="hs-inner">
+        ${s.etiqueta ? `<p class="hs-label">${esc(s.etiqueta)}</p>` : ''}
+        <h2 class="hs-titulo">${esc(s.titulo || 'Título del banner')}${
+          s.titulo_acento ? `<br><span class="acento">${esc(s.titulo_acento)}</span>` : ''}</h2>
+        ${s.texto ? `<p class="hs-desc">${esc(s.texto)}</p>` : ''}
+        ${s.cta_texto ? `<div class="hs-acciones">
+            <span class="btn btn-acento btn-lg">
+              <i class="fas fa-calendar-check"></i> ${esc(s.cta_texto)}</span>
+          </div>` : ''}
+      </div>
+    </div>`;
+}
 
 function filaSlideHero(s, i, total) {
   const esAgente = s.fondo === 'agente';
+  const esImagen = s.fondo === 'imagen';
   return `
-  <article class="apar-slide" data-i="${i}">
-    <header class="apar-slide-head">
+  <article class="apar-slide${s.abierto ? ' abierto' : ''}" data-i="${i}">
+    <header class="apar-slide-head" data-plegar>
       <span class="apar-slide-num">${i + 1}</span>
-      <strong>${esc(s.titulo || 'Slide sin título')}</strong>
+      <strong>${esc(s.titulo || 'Banner sin título')}</strong>
       <span class="pill pill-sm ${s.activo ? 'pill-ok' : 'pill-off'}">
         ${s.activo ? 'Visible' : 'Apagado'}</span>
       <div class="apar-slide-acciones">
@@ -2302,7 +2345,7 @@ function filaSlideHero(s, i, total) {
     </header>
 
     <div class="apar-campos">
-      <label>Etiqueta pequeña
+      <label>Texto pequeño de arriba
         <input data-campo="etiqueta" value="${esc(s.etiqueta || '')}"
                placeholder="Guadalajara" maxlength="40" />
       </label>
@@ -2343,12 +2386,25 @@ function filaSlideHero(s, i, total) {
             String(s.agente_id) === String(a.id) ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}
         </select>
       </label>
+
+      <div class="apar-ancho ${esImagen ? '' : 'oculto'}" data-solo-imagen>
+        <span class="apar-etiqueta">Tu imagen de fondo</span>
+        <div class="apar-subir">
+          ${s.imagen_url ? `<img class="apar-miniatura" src="${esc(s.imagen_url)}" alt="" />` : ''}
+          <label class="btn btn-ghost btn-sm apar-subir-btn">
+            <i class="fas fa-arrow-up-from-bracket"></i>
+            ${s.imagen_url ? 'Cambiar imagen' : 'Elegir imagen'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" data-subir hidden />
+          </label>
+          ${s.imagen_url ? '<button class="btn btn-ghost btn-sm" data-quitar-img>Quitar</button>' : ''}
+          <span class="apar-ayuda">JPG, PNG o WEBP · hasta 3 MB · se ve mejor apaisada</span>
+        </div>
+      </div>
     </div>
   </article>`;
 }
 
 function seccionApariencia() {
-  const slides = HERO_EDIT.length ? HERO_EDIT : [];
   return `
   <div class="admin-head">
     <div>
@@ -2362,32 +2418,27 @@ function seccionApariencia() {
   </div>
 
   <div class="tabs-bar" id="aparTabs">
-    <button class="tab-btn activo" data-tab="hero">Slides de la portada</button>
+    <button class="tab-btn activo" data-tab="hero">Banners de la portada</button>
     <button class="tab-btn" data-tab="orden">Orden de los agentes</button>
   </div>
 
-  <section class="admin-card" data-panel="hero">
-    <div class="apar-barra">
-      <p class="admin-sub">Los slides salen en este orden, uno tras otro.
-         Los apagados no se publican.</p>
-      <div>
-        <button class="btn btn-ghost btn-sm" id="aparNuevoSlide">
-          <i class="fas fa-plus"></i> Añadir slide</button>
-        <button class="btn btn-acento btn-sm" id="aparGuardarHero">
-          <i class="fas fa-floppy-disk"></i> Guardar</button>
-      </div>
-    </div>
+  <section data-panel="hero">
+    <!-- La vista previa va ARRIBA: es lo primero que se mira al editar, y así
+         no hay que bajar hasta la portada para saber cómo va quedando. -->
+    <div class="apar-previa" id="aparPrevia"></div>
 
-    <div id="aparSlides">
-      ${slides.length ? slides.map((s, i) => filaSlideHero(s, i, slides.length)).join('')
-        : `<div class="dir-vacio">
-             <i class="fas fa-images"></i>
-             <h3>La portada usa los slides de fábrica</h3>
-             <p>Añade uno y a partir de ahí manda lo que armes aquí.
-                Mientras no haya ninguno, la portada sigue como está.</p>
-             <button class="btn btn-acento btn-sm" id="aparPrimerSlide">
-               <i class="fas fa-plus"></i> Añadir el primero</button>
-           </div>`}
+    <div class="admin-card">
+      <div class="apar-barra">
+        <p class="admin-sub">Los banners salen en este orden, uno tras otro.
+           Los apagados no se publican.</p>
+        <div>
+          <button class="btn btn-ghost btn-sm" id="aparNuevoSlide">
+            <i class="fas fa-plus"></i> Añadir banner</button>
+          <button class="btn btn-acento btn-sm" id="aparGuardarHero">
+            <i class="fas fa-floppy-disk"></i> Guardar</button>
+        </div>
+      </div>
+      <div id="aparSlides"></div>
     </div>
   </section>
 
@@ -6323,6 +6374,37 @@ async function cargarApariencia() {
   ORDEN_EDIT = AGENTES.slice();
 }
 
+/* Cuál de los banners se está mirando en la vista previa de arriba. */
+let BANNER_ACTIVO = 0;
+
+function pintarPreviaBanner() {
+  const cont = $('#aparPrevia');
+  if (!cont) return;
+  if (!HERO_EDIT.length) {
+    cont.innerHTML = `
+      <div class="apar-previa-vacia">
+        <i class="fas fa-image"></i>
+        <p>Aquí verás el banner mientras lo editas.</p>
+      </div>`;
+    return;
+  }
+  if (BANNER_ACTIVO >= HERO_EDIT.length) BANNER_ACTIVO = HERO_EDIT.length - 1;
+  const s = HERO_EDIT[BANNER_ACTIVO];
+  cont.innerHTML = `
+    <div class="apar-previa-cab">
+      <span class="apar-previa-tag"><i class="fas fa-eye"></i> Así se verá</span>
+      ${HERO_EDIT.length > 1 ? `<div class="apar-previa-puntos">
+        ${HERO_EDIT.map((b, i) => `<button class="apar-previa-punto${
+          i === BANNER_ACTIVO ? ' activo' : ''}${b.activo ? '' : ' apagado'}"
+          data-previa="${i}" title="${esc(b.titulo || 'Banner ' + (i + 1))}">${i + 1}</button>`).join('')}
+      </div>` : ''}
+      ${!s.activo ? '<span class="pill pill-off pill-sm">Apagado: no se publica</span>' : ''}
+    </div>
+    <div class="apar-previa-marco">
+      <div class="hero-slides">${vistaPreviaBanner(s)}</div>
+    </div>`;
+}
+
 function pintarSlidesHero() {
   const cont = $('#aparSlides');
   if (!cont) return;
@@ -6330,11 +6412,12 @@ function pintarSlidesHero() {
     ? HERO_EDIT.map((s, i) => filaSlideHero(s, i, HERO_EDIT.length)).join('')
     : `<div class="dir-vacio">
          <i class="fas fa-images"></i>
-         <h3>La portada usa los slides de fábrica</h3>
+         <h3>La portada usa los banners de fábrica</h3>
          <p>Añade uno y a partir de ahí manda lo que armes aquí.</p>
          <button class="btn btn-acento btn-sm" id="aparPrimerSlide">
            <i class="fas fa-plus"></i> Añadir el primero</button>
        </div>`;
+  pintarPreviaBanner();
 }
 
 function pintarOrdenAgentes() {
@@ -6415,7 +6498,7 @@ function activarApariencia() {
   const nuevo = () => {
     HERO_EDIT.push({
       orden: HERO_EDIT.length, activo: true, fondo: 'marca',
-      etiqueta: '', titulo: 'Título del slide', titulo_acento: '', texto: '',
+      etiqueta: '', titulo: 'Título del banner', titulo_acento: '', texto: '',
       cta_texto: 'Ver agentes', cta_url: 'agentes.html', agente_id: null,
     });
     pintarSlidesHero();
@@ -6430,43 +6513,92 @@ function activarApariencia() {
       const fila = e.target.closest('.apar-slide');
       if (!fila) return;
       const i = Number(fila.dataset.i);
+
+      // Tocar la cabecera enfoca la vista previa en ese banner.
+      if (e.target.closest('[data-plegar]') && !e.target.closest('.apar-slide-acciones')) {
+        BANNER_ACTIVO = i; pintarPreviaBanner(); return;
+      }
       const mover = e.target.closest('[data-mover]');
       if (mover) {
         const j = i + Number(mover.dataset.mover);
         if (j < 0 || j >= HERO_EDIT.length) return;
         [HERO_EDIT[i], HERO_EDIT[j]] = [HERO_EDIT[j], HERO_EDIT[i]];
+        BANNER_ACTIVO = j;
         pintarSlidesHero(); return;
       }
       if (e.target.closest('[data-toggle]')) {
-        HERO_EDIT[i].activo = !HERO_EDIT[i].activo; pintarSlidesHero(); return;
+        HERO_EDIT[i].activo = !HERO_EDIT[i].activo;
+        BANNER_ACTIVO = i; pintarSlidesHero(); return;
+      }
+      if (e.target.closest('[data-quitar-img]')) {
+        HERO_EDIT[i].imagen_url = null;
+        BANNER_ACTIVO = i; pintarSlidesHero(); return;
       }
       if (e.target.closest('[data-borrar]')) {
-        if (!confirm('¿Borrar este slide de la portada?')) return;
-        HERO_EDIT.splice(i, 1); pintarSlidesHero();
+        if (!confirm('¿Borrar este banner de la portada?')) return;
+        HERO_EDIT.splice(i, 1);
+        BANNER_ACTIVO = Math.max(0, i - 1);
+        pintarSlidesHero();
       }
     });
 
-    // Cada tecleo actualiza el objeto; se guarda al pulsar Guardar.
+    // Cada tecleo actualiza el objeto y la vista previa; se guarda al pulsar
+    // Guardar.
     cont.addEventListener('input', (e) => {
       const campo = e.target.dataset.campo;
       if (!campo) return;
       const fila = e.target.closest('.apar-slide');
-      HERO_EDIT[Number(fila.dataset.i)][campo] = e.target.value || null;
+      const i = Number(fila.dataset.i);
+      HERO_EDIT[i][campo] = e.target.value || null;
       // El encabezado sigue al título mientras se escribe. Se toca solo ese
       // texto en vez de repintar la fila: repintar aquí haría perder el foco
       // y el cursor a media palabra.
       if (campo === 'titulo') {
         fila.querySelector('.apar-slide-head strong').textContent =
-          e.target.value.trim() || 'Slide sin título';
+          e.target.value.trim() || 'Banner sin título';
       }
+      // La vista previa sí se repinta entera: está fuera de la fila que se
+      // está editando, así que el foco no se mueve.
+      BANNER_ACTIVO = i;
+      pintarPreviaBanner();
     });
+
     cont.addEventListener('change', (e) => {
-      if (e.target.dataset.campo !== 'fondo') return;
+      const campo = e.target.dataset.campo;
       const fila = e.target.closest('.apar-slide');
-      // Enseña u oculta el selector de agente sin repintar: repintar aquí
-      // haría perder el foco a media edición.
-      const sel = fila.querySelector('[data-solo-agente]');
-      if (sel) sel.classList.toggle('oculto', e.target.value !== 'agente');
+      if (!fila) return;
+      const i = Number(fila.dataset.i);
+
+      if (campo === 'fondo') {
+        HERO_EDIT[i].fondo = e.target.value;
+        // Se enseñan u ocultan los campos del fondo elegido sin repintar la
+        // fila: repintar aquí haría perder el foco a media edición.
+        const selAg = fila.querySelector('[data-solo-agente]');
+        if (selAg) selAg.classList.toggle('oculto', e.target.value !== 'agente');
+        const selImg = fila.querySelector('[data-solo-imagen]');
+        if (selImg) selImg.classList.toggle('oculto', e.target.value !== 'imagen');
+      }
+      if (campo === 'agente_id') HERO_EDIT[i].agente_id = e.target.value || null;
+      BANNER_ACTIVO = i;
+      pintarPreviaBanner();
+    });
+
+    // Subir la imagen de fondo
+    cont.addEventListener('change', (e) => {
+      if (!e.target.matches('[data-subir]')) return;
+      const fila = e.target.closest('.apar-slide');
+      subirImagenBanner(e.target.files[0], Number(fila.dataset.i), e.target);
+    });
+  }
+
+  // Cambiar de banner en la vista previa
+  const previa = $('#aparPrevia');
+  if (previa) {
+    previa.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-previa]');
+      if (!b) return;
+      BANNER_ACTIVO = Number(b.dataset.previa);
+      pintarPreviaBanner();
     });
   }
 
@@ -6486,9 +6618,9 @@ function activarApariencia() {
 async function guardarHero(btn) {
   if (!window.sbClient) { showToast('En modo demo no se guarda.', 'error'); return; }
   const vacio = HERO_EDIT.find((s) => !s.titulo || !s.titulo.trim());
-  if (vacio) { showToast('Hay un slide sin título.', 'error'); return; }
+  if (vacio) { showToast('Hay un banner sin título.', 'error'); return; }
   const sinAgente = HERO_EDIT.find((s) => s.fondo === 'agente' && !s.agente_id);
-  if (sinAgente) { showToast('Un slide con foto de agente no tiene agente elegido.', 'error'); return; }
+  if (sinAgente) { showToast('Un banner con foto de agente no tiene agente elegido.', 'error'); return; }
 
   btn.disabled = true;
   const antes = btn.innerHTML;
@@ -6627,4 +6759,52 @@ function initMasSecciones(ir) {
   });
 
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar(); });
+}
+
+/* Sube la imagen de fondo de un banner a Supabase Storage (bucket `hero`).
+
+   El nombre lleva marca de tiempo y un tramo aleatorio: si se subiera siempre
+   con el mismo nombre, la CDN seguiría sirviendo la anterior durante horas y
+   parecería que el cambio no se guardó. */
+async function subirImagenBanner(archivo, i, input) {
+  if (!archivo) return;
+  if (!window.sbClient) {
+    showToast('En modo demo no se pueden subir imágenes.', 'error');
+    input.value = ''; return;
+  }
+  // Se comprueba antes de subir para no esperar a que viaje el archivo entero.
+  // El límite de verdad lo impone el bucket, que no se puede saltar desde aquí.
+  if (!IMG_TIPOS.includes(archivo.type)) {
+    showToast('Tiene que ser JPG, PNG o WEBP.', 'error');
+    input.value = ''; return;
+  }
+  if (archivo.size > IMG_MAX_BYTES) {
+    showToast(`La imagen pesa ${(archivo.size / 1048576).toFixed(1)} MB y el máximo son 3.`, 'error');
+    input.value = ''; return;
+  }
+
+  const etiqueta = input.closest('.apar-subir-btn');
+  const textoPrevio = etiqueta ? etiqueta.innerHTML : '';
+  if (etiqueta) etiqueta.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo…';
+
+  try {
+    const ext = (archivo.name.split('.').pop() || 'jpg').toLowerCase().slice(0, 4);
+    const nombre = `banner-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await sbClient.storage.from('hero')
+      .upload(nombre, archivo, { cacheControl: '31536000', upsert: false });
+    if (error) throw error;
+
+    const { data } = sbClient.storage.from('hero').getPublicUrl(nombre);
+    HERO_EDIT[i].imagen_url = data.publicUrl;
+    HERO_EDIT[i].fondo = 'imagen';
+    BANNER_ACTIVO = i;
+    pintarSlidesHero();
+    showToast('Imagen lista. Recuerda guardar.');
+  } catch (e) {
+    // El mensaje de Supabase dice el motivo real (tamaño, tipo, permisos);
+    // un «no se pudo» a secas dejaría al Director sin saber qué corregir.
+    showToast('No se pudo subir: ' + e.message, 'error');
+    if (etiqueta) etiqueta.innerHTML = textoPrevio;
+    input.value = '';
+  }
 }
