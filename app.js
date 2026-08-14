@@ -613,11 +613,19 @@ function slideConfigurado(s, activo) {
   const bg = foto ? ` style="background-image:url('${esc(foto)}')"` : '';
   const cls = foto ? clase : (clase === 'hs-agente' ? 'hs-marca' : clase);
 
-  const boton = s.cta_texto
+  // El segundo botón solo lo traen los banners de fábrica (ver
+  // `bannersDeFabrica`); los que crea el Director llevan uno.
+  const segundo = s.cta2_texto
+    ? `<button class="btn btn-outline btn-lg" onclick="${esc(s.cta2_accion || '')}">
+         <i class="fas fa-location-crosshairs"></i> ${esc(s.cta2_texto)}
+       </button>`
+    : '';
+  const boton = (s.cta_texto || segundo)
     ? `<div class="hs-acciones">
-         <a href="${esc(s.cta_url || 'agentes.html')}" class="btn btn-acento btn-lg">
+         ${s.cta_texto ? `<a href="${esc(s.cta_url || 'agentes.html')}" class="btn btn-acento btn-lg">
            <i class="fas fa-calendar-check"></i> ${esc(s.cta_texto)}
-         </a>
+         </a>` : ''}
+         ${segundo}
        </div>`
     : '';
 
@@ -634,6 +642,55 @@ function slideConfigurado(s, activo) {
     </div>`;
 }
 
+/* Los cuatro banners de fábrica, como DATOS y no como HTML.
+
+   Los pinta la portada cuando el Director no ha configurado nada, y son
+   también el punto de partida que ofrece la sección Apariencia: en vez de
+   empezar con una hoja en blanco, se cargan estos y se editan. Antes vivían
+   escritos a mano dentro de `buildHero()` y no había forma de llevarlos al
+   editor. */
+function bannersDeFabrica() {
+  const destacados = AGENTES.filter((a) => a.es_destacado).slice(0, 2);
+  const lista = [{
+    orden: 0, activo: true, fondo: 'marca',
+    etiqueta: [CONFIG.ASEGURADORA, CONFIG.CIUDAD].filter(Boolean).join(' · '),
+    titulo: 'Encuentra al agente', titulo_acento: 'que sí te explica',
+    texto: 'Agentes con cédula vigente, cerca de ti. Ve su perfil, lee lo que '
+         + 'dicen sus clientes y agenda una asesoría sin costo.',
+    cta_texto: 'Ver agentes', cta_url: 'agentes.html',
+    agente_id: null, imagen_url: null,
+    // Segundo botón, solo en el de bienvenida: es el atajo a la búsqueda por
+    // ubicación. No se puede crear desde el editor —un banner del Director
+    // lleva un botón— pero si se parte de los de fábrica, se conserva.
+    cta2_texto: 'Cerca de mí', cta2_accion: 'buscarCerca()',
+  }];
+
+  destacados.forEach((a, n) => {
+    const ramos = (a.especialidades || a.ramos || []).slice(0, 2)
+      .map((r) => (RAMOS[r] || {}).label).filter(Boolean).join(' · ');
+    lista.push({
+      orden: n + 1, activo: true, fondo: 'agente',
+      etiqueta: a.verificado ? 'Cédula verificada' : 'Agente',
+      titulo: a.nombre, titulo_acento: '',
+      texto: [a.titulo, ramos].filter(Boolean).join(' — '),
+      cta_texto: 'Agendar con ' + String(a.nombre).split(' ')[0],
+      cta_url: 'agentes.html',
+      agente_id: a.id, imagen_url: null,
+    });
+  });
+
+  lista.push({
+    orden: lista.length, activo: true, fondo: 'azul',
+    etiqueta: 'Sin costo y sin compromiso',
+    titulo: 'Una asesoría de 45 minutos', titulo_acento: 'te puede ahorrar años',
+    texto: 'En oficina, en tu domicilio o por videollamada. Tú eliges dónde, '
+         + 'cuándo y con quién.',
+    cta_texto: 'Agendar ahora', cta_url: 'agentes.html',
+    agente_id: null, imagen_url: null,
+  });
+  return lista;
+}
+
 function buildHero() {
   const wrap = $('#heroSlides');
   const dots = $('#heroDots');
@@ -647,66 +704,16 @@ function buildHero() {
     return;
   }
 
-  const destacados = AGENTES.filter((a) => a.es_destacado).slice(0, 2);
-  const slides = [];
-
-  // Slide 1 — marca
-  slides.push(`
-    <div class="hero-slide hs-marca activa">
-      <div class="hs-bg"></div>
-      <div class="hs-inner">
-        <p class="hs-label">${esc([CONFIG.ASEGURADORA, CONFIG.CIUDAD].filter(Boolean).join(' · '))}</p>
-        <h1 class="hs-titulo">Encuentra al agente<br><span class="acento">que sí te explica</span></h1>
-        <p class="hs-desc">Agentes con cédula vigente, cerca de ti. Ve su perfil,
-           lee lo que dicen sus clientes y agenda una asesoría sin costo.</p>
-        <div class="hs-acciones">
-          <a href="agentes.html" class="btn btn-acento btn-lg"><i class="fas fa-users"></i> Ver agentes</a>
-          <button class="btn btn-outline btn-lg" onclick="buscarCerca()">
-            <i class="fas fa-location-crosshairs"></i> Cerca de mí
-          </button>
-        </div>
-      </div>
-    </div>`);
-
-  // Slides 2-3 — agentes destacados
-  destacados.forEach((a) => {
-    const ramos = (a.especialidades || a.ramos || []).slice(0, 2)
-      .map((r) => (RAMOS[r] || {}).label).filter(Boolean).join(' · ');
-    slides.push(`
-      <div class="hero-slide hs-agente">
-        <div class="hs-bg" style="background-image:url('${esc(a.foto)}')"></div>
-        <div class="hs-inner">
-          <p class="hs-label">${a.verificado ? '<i class="fas fa-circle-check"></i> Cédula verificada' : 'Agente'}</p>
-          <h2 class="hs-titulo">${esc(a.nombre)}</h2>
-          <p class="hs-desc">${esc(a.titulo || '')}${ramos ? ' — ' + esc(ramos) : ''}<br>
-             <span class="hs-meta">${esc(a.zona || '')} · ${a.anios_experiencia || 0} años de experiencia
-             · ${estrellas(a.calificacion)} ${Number(a.calificacion).toFixed(1)}</span></p>
-          <div class="hs-acciones">
-            <a href="perfil.html?a=${esc(a.slug)}" class="btn btn-acento btn-lg">
-              <i class="fas fa-calendar-check"></i> Agendar con ${esc(a.nombre.split(' ')[0])}
-            </a>
-          </div>
-        </div>
-      </div>`);
-  });
-
-  // Slide 4 — asesoría sin costo
-  slides.push(`
-    <div class="hero-slide hs-agenda">
-      <div class="hs-bg"></div>
-      <div class="hs-inner">
-        <p class="hs-label">Sin costo y sin compromiso</p>
-        <h2 class="hs-titulo">Una asesoría de 45 minutos<br><span class="acento">te puede ahorrar años</span></h2>
-        <p class="hs-desc">En oficina, en tu domicilio o por videollamada. Tú eliges
-           dónde, cuándo y con quién.</p>
-        <div class="hs-acciones">
-          <a href="agentes.html" class="btn btn-acento btn-lg"><i class="fas fa-calendar-days"></i> Agendar ahora</a>
-        </div>
-      </div>
-    </div>`);
-
-  wrap.innerHTML = slides.join('');
-  pintarPuntosHero(dots, slides.length);
+  // Los de fábrica salen del MISMO sitio que ofrece el editor, para que lo que
+  // se ve en la portada y lo que se carga en Apariencia no puedan divergir.
+  const deFabrica = bannersDeFabrica();
+  wrap.innerHTML = deFabrica.map((s, i) => slideConfigurado({
+    ...s,
+    // `slideConfigurado` espera la foto ya resuelta, como la trae la vista.
+    agente_foto: s.fondo === 'agente' && s.agente_id
+      ? (AGENTES.find((a) => String(a.id) === String(s.agente_id)) || {}).foto : null,
+  }, i === 0)).join('');
+  pintarPuntosHero(dots, deFabrica.length);
   iniciarCarrusel();
 }
 
@@ -6413,9 +6420,15 @@ function pintarSlidesHero() {
     : `<div class="dir-vacio">
          <i class="fas fa-images"></i>
          <h3>La portada usa los banners de fábrica</h3>
-         <p>Añade uno y a partir de ahí manda lo que armes aquí.</p>
-         <button class="btn btn-acento btn-sm" id="aparPrimerSlide">
-           <i class="fas fa-plus"></i> Añadir el primero</button>
+         <p>Puedes empezar con los ${bannersDeFabrica().length} que ya están
+            publicados y cambiarlos a tu gusto, o armar uno desde cero.
+            Nada se publica hasta que guardes.</p>
+         <div class="apar-vacio-btns">
+           <button class="btn btn-acento btn-sm" id="aparCargarFabrica">
+             <i class="fas fa-wand-magic-sparkles"></i> Empezar con los actuales</button>
+           <button class="btn btn-ghost btn-sm" id="aparPrimerSlide">
+             <i class="fas fa-plus"></i> Crear uno en blanco</button>
+         </div>
        </div>`;
   pintarPreviaBanner();
 }
@@ -6510,6 +6523,13 @@ function activarApariencia() {
   if (cont) {
     cont.addEventListener('click', (e) => {
       if (e.target.closest('#aparPrimerSlide')) { nuevo(); return; }
+      if (e.target.closest('#aparCargarFabrica')) {
+        HERO_EDIT = bannersDeFabrica();
+        BANNER_ACTIVO = 0;
+        pintarSlidesHero();
+        showToast('Listos para editar. Se publican al guardar.');
+        return;
+      }
       const fila = e.target.closest('.apar-slide');
       if (!fila) return;
       const i = Number(fila.dataset.i);

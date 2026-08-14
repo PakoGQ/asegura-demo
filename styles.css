@@ -9063,3 +9063,13 @@ a.panel-marca:hover .logo-img { opacity: .82; transition: var(--transition); }
   .apar-subir { gap: .45rem; }
   .apar-ayuda { flex-basis: 100%; }
 }
+
+/* Los dos caminos del estado vacío: partir de los banners publicados o
+   empezar en blanco. */
+.apar-vacio-btns {
+  display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  .apar-vacio-btns { flex-direction: column; }
+  .apar-vacio-btns .btn { justify-content: center; }
+}
