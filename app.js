@@ -7741,6 +7741,36 @@ function elegirAgente(opciones) {
   return parejos[Math.floor(Math.random() * parejos.length)];
 }
 
+/* Hasta dónde se considera «cerca». La zona metropolitana mide unos 30 km de
+   punta a punta —de Tlajomulco a Zapopan hay 28—, así que a más de 40 el
+   visitante ya no tiene a nadie al lado, venga de donde venga el dato. */
+const KM_COBERTURA_CERCANA = 40;
+
+/* Dónde está el visitante y si eso cae en zona atendida. Unifica los dos
+   orígenes posibles, que es justo lo que faltaba:
+
+     · Escribió su CP  → se sabe el nombre del sitio y si es zona nuestra.
+     · Dio ubicación   → no hay nombre, así que se DEDUCE midiendo al agente
+                         más cercano. Sin esto, quien daba GPS desde Vallarta
+                         se saltaba el filtro de videollamada.
+
+   Se detectó en producción: bastaba escribir el CP en el buscador y pulsar
+   «Asígnenme uno» para que la comprobación no se hiciera. La promesa del texto
+   y el filtro tienen que salir del mismo sitio o se separan. */
+function lugarActual() {
+  if (CP_BUSCADO) return ubicarPorCP(CP_BUSCADO);
+  if (!UBICACION_CLIENTE) return null;
+  const conCoords = AGENTES.filter((a) => a.lat != null && a.lng != null);
+  if (!conCoords.length) return null;
+  const cercano = Math.min(...conCoords.map((a) =>
+    distanciaKm(UBICACION_CLIENTE.lat, UBICACION_CLIENTE.lng, a.lat, a.lng)));
+  return {
+    nombre: 'tu zona',
+    centro: UBICACION_CLIENTE,
+    propia: cercano <= KM_COBERTURA_CERCANA,
+  };
+}
+
 /* Punto de entrada desde los botones. Si ya se sabe dónde está el visitante
    —porque escribió su CP o dio ubicación— se asigna directo; si no, se le
    pregunta lo mínimo. */
@@ -7749,7 +7779,7 @@ function asignarAgente(ramoPreferido) {
     || ($('#searchRamo') && $('#searchRamo').value)
     || FILTROS.ramo || '';
 
-  if (UBICACION_CLIENTE) { pintarAsignado(ramo, UBICACION_CLIENTE); return; }
+  if (UBICACION_CLIENTE) { pintarAsignado(ramo, UBICACION_CLIENTE, lugarActual()); return; }
   pedirCPParaAsignar(ramo);
 }
 
@@ -7826,7 +7856,9 @@ function pintarAsignado(ramo, ubicacion, lugar) {
       <h3 class="modal-title">Tu agente</h3>
       <button class="modal-close" onclick="closeModal('modalAsignar')"><i class="fas fa-times"></i></button>
     </div>
-    ${fuera ? `<p class="modal-sub">Todavía no hay agente en ${esc(lugar.nombre)},
+    ${fuera ? `<p class="modal-sub">${lugar.nombre === 'tu zona'
+         ? 'No tenemos agente cerca de ti'
+         : `Todavía no hay agente en ${esc(lugar.nombre)}`},
        así que te asignamos al que mejor te puede atender en línea.</p>` : ''}
     <div class="asig-agente">
       <img src="${esc(a.foto)}" alt="${esc(a.nombre)}" />
