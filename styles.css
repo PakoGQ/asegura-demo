@@ -40,6 +40,8 @@
   --acento-lt:   var(--vaxti-naranja-vivo);
   --acento-dk:   var(--vaxti-naranja-hondo);
   --acento-glow: rgba(254,96,49,.22);
+  /* Fondo del acento muy rebajado, para píldoras que llaman sin gritar. */
+  --acento-suave: rgba(254,96,49,.10);
 
   --white:     #ffffff;
 
@@ -7590,21 +7592,64 @@ details.faq-item[open] .faq-a {
 }
 .login-olvide:hover { color: var(--acento); }
 
-/* «¿No sabes a quién elegir?» — bajo el buscador de la portada. Discreto a
-   propósito: la puerta principal sigue siendo el directorio, esto es la salida
-   para quien se siente perdido delante de treinta tarjetas. */
+/* «¿No sabes a quién elegir?» — bajo el buscador de la portada.
+
+   Nació como un enlace subrayado y discreto, partiendo de que la puerta
+   principal es el directorio. Se subió a píldora el 2-sep-2026, a petición de
+   Paco y con razón: es la función que compite de frente con la captación del
+   externo, y como enlace gris no la veía nadie.
+
+   Llama, pero NO compite con «Buscar»: ese sigue siendo naranja sólido y este
+   es naranja rebajado con borde. La jerarquía se mantiene. */
 .search-asignar {
-  /* .75rem de padding vertical para que la zona tocable llegue a 44px: el
-     visitante que no sabe a quién elegir es justo el que viene en celular. */
-  display: block; margin: .5rem auto 0; padding: .75rem .9rem;
-  background: none; border: 0; cursor: pointer;
-  /* Texto oscuro: el buscador se apoya en superficie CLARA, no sobre el hero.
-     La primera versión iba en blanco y quedó invisible sobre blanco. */
-  font: inherit; font-size: .85rem; color: var(--t2);
-  text-decoration: underline; text-underline-offset: 3px;
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+  width: fit-content; max-width: 100%;
+  /* El padding vertical deja la zona tocable en 44px: quien no sabe a quién
+     elegir es justo el que viene en celular. */
+  margin: .8rem auto 0; padding: .7rem 1.15rem;
+  background: var(--acento-suave);
+  border: 1px solid var(--border-h);
+  border-radius: 999px;
+  font: inherit; font-size: .87rem; font-weight: 600; line-height: 1.2;
+  /* Texto en AZUL sobre el melocotón, no en naranja: el naranja hondo daba
+     4.21 de contraste y AA pide 4.5 para texto de este tamaño. El azul da 14,
+     el icono se queda naranja y la píldora sigue siendo de marca. */
+  color: var(--t1); cursor: pointer; text-align: center;
+  box-shadow: 0 1px 3px var(--acento-glow);
+  transition: background .2s ease, color .2s ease,
+              transform .2s ease, box-shadow .2s ease;
 }
-.search-asignar:hover { color: var(--acento); }
-.search-asignar i { margin-right: .35rem; }
+.search-asignar i {
+  font-size: .95rem; color: var(--acento);
+  transition: color .2s ease, transform .25s ease;
+}
+/* El hover va al naranja HONDO, no al normal: blanco sobre #fe6031 daba 3.03
+   y sobre #d1401a da 4.71. Se ve igual de vivo y sí se lee. */
+.search-asignar:hover {
+  background: var(--acento-dk); color: var(--white);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px var(--acento-glow);
+}
+.search-asignar:hover i { color: var(--white); transform: rotate(-12deg) scale(1.08); }
+.search-asignar:focus-visible {
+  outline: 2px solid var(--acento); outline-offset: 3px;
+}
+
+/* Nada de esto se mueve solo (decisiones §16): el movimiento responde al
+   puntero. Y con reducción de movimiento pedida, ni eso. */
+@media (prefers-reduced-motion: reduce) {
+  .search-asignar, .search-asignar i { transition: none; }
+  .search-asignar:hover { transform: none; }
+  .search-asignar:hover i { transform: none; }
+}
+
+/* En móvil el texto largo parte en dos líneas y la píldora se estira.
+   `text-wrap: balance` reparte las dos líneas en vez de dejar «uno» solo
+   abajo; donde no esté soportado, simplemente parte como antes. */
+@media (max-width: 480px) {
+  .search-asignar { width: 100%; font-size: .84rem; }
+  .search-asignar span { text-wrap: balance; }
+}
 
 /* El agente asignado, dentro del modal. */
 .asig-agente { display: flex; gap: .9rem; align-items: center; margin: .2rem 0 1rem; }
