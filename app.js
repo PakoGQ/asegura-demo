@@ -8364,29 +8364,74 @@ const IA_PISTAS = {
    gastos médicos»— tiene dos. */
 function ramosMencionados(texto) {
   const n = normaliza(texto);
-  const salida = [];
-  for (const [ramo, ops] of Object.entries(RAMO_SINONIMOS)) {
-    if (ops.some((o) => n.includes(o))) salida.push(ramo);
-  }
-  for (const [ramo, pistas] of Object.entries(IA_PISTAS)) {
-    if (!salida.includes(ramo) && pistas.some((p) => n.includes(p))) salida.push(ramo);
-  }
-  return salida;
+  const donde = {};   // ramo -> posición de su primera mención
+
+  const anotar = (ramo, ops) => {
+    for (const o of ops) {
+      const i = n.indexOf(o);
+      if (i >= 0 && (donde[ramo] === undefined || i < donde[ramo])) donde[ramo] = i;
+    }
+  };
+  for (const [ramo, ops] of Object.entries(RAMO_SINONIMOS)) anotar(ramo, ops);
+  for (const [ramo, pistas] of Object.entries(IA_PISTAS))    anotar(ramo, pistas);
+
+  /* Se ordena por DÓNDE aparece cada uno en el texto, no por el orden de las
+     tablas. Antes salían primero los detectados por sinónimo y después los
+     detectados por pista, así que «tengo un Nissan Sentra sin seguro y quiero
+     gastos médicos» preguntaba por los gastos médicos primero y dejaba el
+     coche para el final — justo al revés de como lo contó el visitante. */
+  return Object.keys(donde).sort((a, b) => donde[a] - donde[b]);
 }
 
-/* La pregunta de seguimiento de cada ramo. Son las mismas que el prompt del
+/* Las preguntas de cada ramo, EN ORDEN. Son las mismas que el prompt del
    servidor le pide al modelo, para que la demostración se parezca a lo que va
-   a pasar de verdad y no prometa otra cosa. */
+   a pasar de verdad y no prometa otra cosa. Si se cambian aquí, cambiarlas
+   también en `supabase/functions/asistente/index.ts` — si no, el día que se
+   encienda la IA real preguntaría MENOS que la demostración, que es el peor
+   sitio para descubrir una diferencia.
+
+   Van de dos en dos a propósito. Tres preguntas ya se sienten cuestionario, y
+   lo que falte lo pregunta el agente en la cita: para eso es la cita.
+
+   La EDAD sí se pregunta —en seguros define casi todo— pero nombre, teléfono
+   y correo NO: eso solo se pide al agendar, y solo al agente que se eligió. */
 const IA_PREGUNTA = {
-  auto:           '¿El auto ya trae seguro o se te venció?',
-  gastos_medicos: '¿Sería para ti solo o también para tu familia?',
-  vida:           '¿Quién depende de ti económicamente hoy?',
-  hogar:          '¿La casa es tuya o rentas?',
-  empresarial:    '¿A qué se dedica el negocio y cuántos empleados son?',
-  educativo:      '¿En cuántos años entraría a la universidad?',
-  fianzas:        '¿Qué contrato o trámite te está pidiendo la fianza?',
-  ahorro:         '¿En cuántos años pensarías usar ese dinero?',
-  retiro:         '¿A qué edad te gustaría dejar de trabajar?',
+  auto: [
+    '¿Qué coche es? Marca, modelo y año.',
+    '¿Ya trae seguro o se te venció?',
+  ],
+  gastos_medicos: [
+    '¿Sería para ti solo o también para tu familia?',
+    '¿Qué edad tienen los que entrarían en la póliza?',
+  ],
+  vida: [
+    '¿Quién depende de ti económicamente hoy?',
+    '¿Qué edad tienes?',
+  ],
+  hogar: [
+    '¿La casa es tuya o rentas?',
+    '¿En qué zona está y de cuántas recámaras?',
+  ],
+  empresarial: [
+    '¿A qué se dedica el negocio?',
+    '¿Cuántos empleados son, más o menos?',
+  ],
+  educativo: [
+    '¿Qué edad tiene tu hijo o hija?',
+    '¿En cuántos años entraría a la universidad?',
+  ],
+  fianzas: [
+    '¿Qué tipo de fianza te piden: cumplimiento, anticipo, vicios ocultos?',
+    '¿Para qué contrato o trámite es?',
+  ],
+  ahorro: [
+    '¿En cuántos años pensarías usar ese dinero?',
+    '¿Es para una meta concreta o para tenerlo guardado?',
+  ],
+  retiro: [
+    '¿Qué edad tienes hoy?',
+    '¿A qué edad te gustaría dejar de trabajar?',
+  ],
 };
 
 /* Dos redacciones del mismo ramo, y hacen falta las dos: el mensaje de cierre
@@ -8406,47 +8451,118 @@ const IA_CIERRE = {
 };
 
 /* Responde como lo haría el servidor: mismo contrato (`texto` o `resumen`),
-   para que `enviarAlAsistente()` no tenga que saber cuál de los dos le habló. */
+   para que `enviarAlAsistente()` no tenga que saber cuál de los dos le habló.
+
+   Es SIN ESTADO: recibe la conversación entera y deduce en qué punto va. Así
+   no hay que sincronizar un contador con lo que se ve en pantalla, que es de
+   donde salen los desajustes cuando alguien recarga o vuelve atrás. */
 function respuestaDemoIA(mensajes) {
   const delVisitante = mensajes.filter((m) => m.role === 'user');
+  const preguntasHechas = mensajes.filter((m) => m.role === 'assistant');
   const todo = delVisitante.map((m) => m.content).join(' ');
-  const ramos = ramosMencionados(todo);
   const turno = delVisitante.length;
 
-  // Primer mensaje y algo reconocible: una pregunta y a esperar.
-  if (turno === 1 && ramos.length) {
-    const p = IA_PREGUNTA[ramos[0]] || '¿Desde cuándo lo traes pendiente?';
-    // «también te interesa auto» sonaba a máquina. Con la forma larga se lee
-    // como algo que diría una persona.
-    const otros = ramos.length > 1
-      ? ` Y también ${(IA_CIERRE[ramos[1]] || {}).tu || 'lo otro'}.`
-      : '';
-    return { texto: `Entendido.${otros} ${p}` };
+  /* Los ramos se fijan con el PRIMER mensaje que traiga alguno —el
+     planteamiento— y no se recalculan después. Los mensajes siguientes son
+     respuestas a preguntas, no temas nuevos, y tomarlas como tales desviaba la
+     conversación: a «tengo un taller mecánico» seguido de «reparación de
+     autos» le abría el ramo de autos y acababa preguntándole al mecánico qué
+     coche tiene. */
+  let ramos = [];
+  let planteamiento = (delVisitante[0] || {}).content || '';
+  for (const m of delVisitante) {
+    const r = ramosMencionados(m.content);
+    if (r.length) { ramos = r; planteamiento = m.content; break; }
   }
 
-  // Primer mensaje sin nada reconocible: pedirlo con otras palabras.
-  if (turno === 1) {
+  /* Primer mensaje sin nada reconocible: no se puede preguntar por un coche a
+     quien todavía no ha dicho que tiene uno. */
+  if (turno === 1 && !ramos.length) {
     return {
       texto: 'Cuéntame un poco más: ¿es por un auto, por salud, por tu casa, '
            + 'por el negocio, o por ahorro y retiro?',
     };
   }
 
-  // Segundo mensaje: se cierra. Nadie quiere un cuestionario.
+  /* La cola de preguntas: las dos del ramo principal y, si mencionó un segundo
+     ramo, la primera de ese. El visitante que llega diciendo dos cosas espera
+     que le pregunten por las dos. */
+  const cola = [];
+  (IA_PREGUNTA[ramos[0]] || []).forEach((p) => cola.push({ ramo: ramos[0], p }));
+  if (ramos[1] && (IA_PREGUNTA[ramos[1]] || [])[0]) {
+    cola.push({ ramo: ramos[1], p: IA_PREGUNTA[ramos[1]][0] });
+  }
+
+  /* Cuántas se han hecho ya. Se cuentan las preguntas reales del asistente, no
+     los turnos: si el primer mensaje no traía ramo, hubo un turno que no
+     preguntó nada de la cola. */
+  const yaHechas = preguntasHechas.filter((m) => cola.some((c) => m.content.includes(c.p))).length;
+
+  if (yaHechas < cola.length) {
+    const siguiente = cola[yaHechas];
+    if (yaHechas === 0) {
+      const otros = ramos.length > 1
+        ? ` Y también ${(IA_CIERRE[ramos[1]] || {}).tu || 'lo otro'}.`
+        : '';
+      return { texto: `Entendido.${otros} ${siguiente.p}` };
+    }
+    // A partir de la segunda, se enlaza con lo que acaba de decir en vez de
+    // soltar la pregunta a secas, que se siente formulario.
+    const enlaces = ['Perfecto.', 'Va.', 'Entiendo.'];
+    return { texto: `${enlaces[yaHechas % enlaces.length]} ${siguiente.p}` };
+  }
+
+  /* Ya se preguntó todo: se cierra.
+
+     El resumen empareja cada pregunta con lo que contestaron, en vez de pegar
+     el texto corrido. Un agente que lee «Coche: Nissan Sentra 2022 · Seguro:
+     se venció el mes pasado» llega preparado; uno que lee un párrafo pegado
+     tiene que reconstruirlo él. */
   const finales = ramos.length ? ramos.slice(0, 2) : ['vida'];
   const paraTi  = finales.map((r) => (IA_CIERRE[r] || {}).tu || 'asesoría').join(' y ');
   const paraEl  = finales.map((r) => (IA_CIERRE[r] || {}).su || 'asesoría').join(' y ');
-  const dicho = delVisitante.map((m) => m.content.trim()).join(' ');
 
+  const pares = [];
+  cola.forEach((c) => {
+    const i = mensajes.findIndex((m) => m.role === 'assistant' && m.content.includes(c.p));
+    const respuesta = i >= 0 && mensajes[i + 1] && mensajes[i + 1].role === 'user'
+      ? mensajes[i + 1].content.trim() : '';
+    if (respuesta) pares.push(`${etiquetaPregunta(c.p)}: ${respuesta}`);
+  });
+
+  const detalle = pares.length ? ` ${pares.join(' · ')}.` : '';
+
+  /* Se cita el mensaje donde PLANTEÓ el caso, no el primero a secas: quien
+     empieza con «hola, no sé qué necesito» dejaba esa frase en el resumen del
+     agente, que no dice nada de nada. */
   return {
     resumen: {
       ramos: finales,
-      resumen: `El cliente busca ${paraEl}. Con sus palabras: «${dicho.slice(0, 240)}».`,
+      resumen: `El cliente busca ${paraEl}. Lo que dijo: «${planteamiento.slice(0, 180)}».${detalle}`,
       para_el_cliente: `Listo: necesitas ${paraTi}. Te busco quién lo maneja cerca de ti.`,
-      urgencia: /venc|urge|ya se me|mañana|esta semana|pasado mañana/i.test(dicho)
+      urgencia: /venc|urge|ya se me|mañana|esta semana|pasado mañana|cuanto antes/i.test(todo)
         ? 'pronto' : 'normal',
     },
   };
+}
+
+/* Convierte la pregunta en una etiqueta corta para el resumen. Escribir
+   «¿Qué coche es? Marca, modelo y año.: Nissan Sentra» sería ilegible. */
+function etiquetaPregunta(p) {
+  const mapa = [
+    ['Qué coche', 'Coche'], ['Ya trae seguro', 'Seguro actual'],
+    ['para ti solo', 'Para quién'], ['edad tienen los que', 'Edades'],
+    ['depende de ti', 'Dependientes'], ['edad tienes hoy', 'Edad'],
+    ['edad tienes', 'Edad'], ['casa es tuya', 'Casa'],
+    ['qué zona está', 'Zona y tamaño'], ['se dedica el negocio', 'Giro'],
+    ['Cuántos empleados', 'Empleados'], ['edad tiene tu hijo', 'Edad del hijo'],
+    ['entraría a la universidad', 'Años para la universidad'],
+    ['tipo de fianza', 'Tipo de fianza'], ['qué contrato', 'Contrato'],
+    ['cuántos años pensarías', 'Plazo'], ['meta concreta', 'Destino'],
+    ['dejar de trabajar', 'Edad de retiro'],
+  ];
+  const hit = mapa.find(([clave]) => p.includes(clave));
+  return hit ? hit[1] : 'Dato';
 }
 
 /* La franja. Se pone una sola vez y solo cuando ya se sabe que no hay servidor
