@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Recuperar contraseña — Vaxti</title>
+  <meta name="theme-color" content="#00224f" />
+  <!-- Esta pantalla nunca debe salir en un buscador. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/png" href="logo-icono.png" />
+  <link rel="apple-touch-icon" href="logo-icono.png" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- ────────────────────────────────────────────────────────────────────────
+       ESTE SCRIPT VA ANTES DEL CDN DE SUPABASE, A PROPÓSITO.
+
+       El enlace del correo aterriza aquí con los tokens en el hash
+       (#access_token=…&type=recovery). supabase-js los lee y BORRA el hash de
+       la barra de direcciones en cuanto se crea el cliente, que es lo correcto
+       —un token no debe quedarse en el historial— pero deja a app.js sin poder
+       saber si el usuario venía de un enlace o entró a la página a mano.
+
+       Guardarlo aquí es la única forma de tenerlo con seguridad: en el momento
+       en que corre esta línea, supabase-js todavía ni se ha descargado.
+       Si se mueve este <script> más abajo, la página empieza a decir
+       «aquí no hay nada que hacer» aunque el enlace sea bueno.
+       ──────────────────────────────────────────────────────────────────── -->
+  <script>window.__RECU_HASH = location.hash;</script>
+</head>
+<body>
+  <main class="offline-wrap rec-wrap">
+    <a href="index.html">
+      <img class="logo-img logo-grande" src="logo.png" alt="Vaxti"
+           onerror="this.classList.add('sin-logo')" />
+    </a>
+
+    <!-- Lo pinta initRecuperar() según en qué estado esté el enlace:
+         comprobando, caducado, formulario, o listo. -->
+    <div id="recCaja">
+      <h1>Comprobando el enlace…</h1>
+      <p><i class="fas fa-spinner fa-spin"></i> Un momento.</p>
+    </div>
+
+    <p class="offline-nota">
+      ¿No pediste este cambio? No hagas nada: tu contraseña sigue siendo la de
+      siempre y el enlace vence solo en una hora.
+    </p>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -23,7 +23,7 @@
    cachés viejas y avisa a las pestañas abiertas (banner de actualización).
    ========================================================================== */
 
-const CACHE_NAME = 'vaxti-v1';
+const CACHE_NAME = 'vaxti-v2';
 const OFFLINE_URL = 'offline.html';
 
 /* Estáticos: cache-first. Cambian poco y así la app abre al instante. */
@@ -40,7 +40,7 @@ const ESTATICOS = [
   'icon-maskable-512.png',
 ];
 
-/* Las 12 pantallas. Se precachean para que la app abra sin red. */
+/* Las 13 pantallas. Se precachean para que la app abra sin red. */
 const PAGINAS = [
   './',
   'index.html',
@@ -52,6 +52,9 @@ const PAGINAS = [
   'terminos.html',
   'privacidad.html',
   'cookies.html',
+  /* Sin red no puede hacer nada —necesita hablar con Supabase—, pero cargarla
+     le deja decirlo con sus palabras en vez de caer en offline.html. */
+  'recuperar.html',
   'panel-director.html',
   'panel-agente.html',
 ];

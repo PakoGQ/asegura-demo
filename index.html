@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Vaxti — Encuentra tu agente de seguros en Guadalajara</title>
-  <meta name="description" content="Agentes de seguros con cédula vigente en Guadalajara. Ve su perfil, sus ramos y sus reseñas, y agenda una asesoría sin costo en oficina, a domicilio o por videollamada." />
+  <title>Vaxti — Encuentra tu asesor en Jalisco</title>
+  <meta name="description" content="Asesores con cédula vigente en Jalisco: seguros, ahorro y retiro. Ve su perfil, sus ramos y sus reseñas, y agenda una asesoría sin costo en oficina, a domicilio o por videollamada." />
   <meta name="theme-color" content="#00224f" />
   <link rel="icon" type="image/png" href="logo-icono.png" />
   <link rel="apple-touch-icon" href="logo-icono.png" />
@@ -92,7 +92,7 @@
   </button>
   <form class="search-bar" id="searchForm">
     <i class="fas fa-search" style="color:var(--t3);font-size:.9rem"></i>
-    <input type="text" id="searchInput" placeholder="Busca por nombre del agente…" autocomplete="off" />
+    <input type="text" id="searchInput" placeholder="Nombre del agente o tu código postal…" autocomplete="off" />
     <div class="search-divider"></div>
     <div class="search-filter">
       <i class="fas fa-shield-halved" style="font-size:.75rem"></i>
@@ -105,13 +105,18 @@
     </div>
     <button type="submit" class="btn btn-acento">Buscar</button>
   </form>
+  <!-- Para quien no quiere comparar treinta perfiles. No pide datos: solo el
+       código postal, y enseña a quién le tocó y por qué. -->
+  <button type="button" class="search-asignar" onclick="asignarAgente()">
+    <i class="fas fa-wand-magic-sparkles"></i> ¿No sabes a quién elegir? Te asignamos uno
+  </button>
 </div>
 
 <!-- ── Barra de confianza ── -->
 <div class="stats-bar">
   <div class="stat-item">
     <span class="stat-pulse"></span>
-    <strong class="stat-num" id="statsCount">4</strong>&nbsp;agentes en Guadalajara
+    <strong class="stat-num" id="statsCount">4</strong>&nbsp;asesores con cédula vigente
   </div>
   <div class="stat-item">
     <i class="fas fa-id-card"></i> Cédula <strong class="stat-num">verificada</strong>
@@ -128,7 +133,7 @@
 <section class="gal-section">
   <div class="gal-header">
     <div>
-      <p class="section-label">Nuestro equipo en Guadalajara</p>
+      <p class="section-label">Nuestro equipo</p>
       <h2 class="gal-title">Conoce a tu <span class="acento">agente</span></h2>
     </div>
     <a href="agentes.html" class="btn btn-outline btn-sm">
@@ -244,9 +249,12 @@
       <p>Sí. No hay exclusividad: agendas con quien quieras y las veces que quieras.</p>
     </details>
     <details>
-      <summary>¿Atienden fuera de Guadalajara?</summary>
-      <p>Cada perfil indica su zona y hasta dónde se traslada. Para lugares lejanos,
-         casi todos atienden por videollamada.</p>
+      <summary>¿Atienden en todo Jalisco?</summary>
+      <p>Sí. Escribe tu código postal en el buscador y te ordenamos el equipo por
+         cercanía, estés donde estés en el estado. Las oficinas están en la zona
+         metropolitana de Guadalajara: si vives lejos, te lo decimos claro y te
+         mostramos a quienes atienden por videollamada — misma asesoría y la
+         misma cédula, sin que te muevas.</p>
     </details>
     <details>
       <summary>¿Qué pasa con mis datos?</summary>
@@ -261,7 +269,7 @@
   <div class="footer-grid">
     <div class="footer-brand">
       <div class="nav-logo"><img class="logo-img" src="logo.png" alt="Vaxti Asesores Financieros" onerror="this.classList.add('sin-logo')" /></div>
-      <p>Agentes de seguros con cédula vigente en Guadalajara. Encuentra al tuyo,
+      <p>Asesores con cédula vigente en Jalisco. Encuentra al tuyo,
          agenda una asesoría y entiende tu póliza antes de firmarla.</p>
     </div>
     <div>

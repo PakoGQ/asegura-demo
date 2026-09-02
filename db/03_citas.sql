@@ -29,7 +29,8 @@ create table if not exists public.citas (
   duracion_min     int not null default 45,
   ramo_interes     text check (ramo_interes in (
                      'auto', 'vida', 'gastos_medicos', 'hogar',
-                     'empresarial', 'educativo', 'fianzas')),
+                     'empresarial', 'educativo', 'fianzas',
+                     'ahorro', 'retiro')),
   mensaje          text,                                -- lo que escribió el cliente
 
   estado           text not null default 'pendiente' check (estado in (

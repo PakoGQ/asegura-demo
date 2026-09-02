@@ -113,7 +113,8 @@ create table if not exists public.ramos_agente (
   agente_id       uuid not null references public.agentes (id) on delete cascade,
   ramo            text not null check (ramo in (
                     'auto', 'vida', 'gastos_medicos', 'hogar',
-                    'empresarial', 'educativo', 'fianzas')),
+                    'empresarial', 'educativo', 'fianzas',
+                    'ahorro', 'retiro')),
   es_especialidad boolean not null default false,       -- lo que más vende
   certificado     boolean not null default false,       -- acreditación del ramo
   nota            text,

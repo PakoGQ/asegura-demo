@@ -15,11 +15,12 @@ window.CONFIG = {
   SUBMARCA: 'Asesores Financieros',
   ASEGURADORA: '',   // vacío en el demo público; aquí va la aseguradora del cliente
   TAGLINE: 'Tu agente de seguros, cerca de ti',
-  CIUDAD: 'Guadalajara',
+  CIUDAD: 'Guadalajara',        // dónde está la agencia
+  COBERTURA: 'Jalisco',         // hasta dónde atiende — no es lo mismo (2-sep-2026)
   WHATSAPP_CENTRAL: '523310000001',
 
   // Zonas del buscador. Se muestran como chips en móvil.
-  ZONAS: ['Toda la ciudad', 'Providencia', 'Chapultepec', 'Andares',
+  ZONAS: ['Todo Jalisco', 'Providencia', 'Chapultepec', 'Andares',
           'Centro', 'Tlaquepaque', 'Zapopan', 'Tlajomulco'],
 };
 

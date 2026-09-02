@@ -38,7 +38,8 @@ create table if not exists public.polizas (
   aseguradora        text not null default 'GNP',        -- [GNP]
   ramo               text not null check (ramo in (
                        'auto', 'vida', 'gastos_medicos', 'hogar',
-                       'empresarial', 'educativo', 'fianzas')),
+                       'empresarial', 'educativo', 'fianzas',
+                       'ahorro', 'retiro')),
   numero_poliza      text not null,
   prima_anual        numeric(12,2) not null check (prima_anual >= 0),
   comision_pct       numeric(5,2) check (comision_pct between 0 and 100),
@@ -91,7 +92,8 @@ create table if not exists public.oportunidades (
                     'cross_sell', 'riesgo_no_renovacion', 'revision_cobertura')),
   ramo_sugerido   text check (ramo_sugerido in (
                     'auto', 'vida', 'gastos_medicos', 'hogar',
-                    'empresarial', 'educativo', 'fianzas')),
+                    'empresarial', 'educativo', 'fianzas',
+                    'ahorro', 'retiro')),
   motivo          text not null,
   valor_estimado  numeric(12,2),
   estatus         text not null default 'nueva' check (estatus in (

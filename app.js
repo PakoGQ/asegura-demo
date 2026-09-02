@@ -19,6 +19,13 @@ const RAMOS = {
   empresarial:    { label: 'Empresarial',     icono: 'fa-building',       color: '#00224f' },
   educativo:      { label: 'Educativo',       icono: 'fa-graduation-cap', color: '#d9a520' },
   fianzas:        { label: 'Fianzas',         icono: 'fa-file-signature', color: '#9c6644' },
+  /* [VAXTI] Ahorro y retiro NO son seguros, y entran a propósito (1-sep-2026).
+     El logo dice «Asesores Financieros» y el Director ya vende PPR, Trasciende
+     y Dotales en su propia comunicación. Un directorio que solo ofrece siete
+     ramos de seguro deja fuera la mitad de lo que su equipo coloca. Cierra la
+     §18 de CLAUDE.md, que llevaba abierta desde el 28-jul-2026. */
+  ahorro:         { label: 'Ahorro e inversión', icono: 'fa-piggy-bank',   color: '#7a9e1f' },
+  retiro:         { label: 'Retiro (PPR)',     icono: 'fa-umbrella-beach', color: '#a34a86' },
 };
 
 const MODALIDADES = {
@@ -653,7 +660,8 @@ function bannersDeFabrica() {
   const destacados = AGENTES.filter((a) => a.es_destacado).slice(0, 2);
   const lista = [{
     orden: 0, activo: true, fondo: 'marca',
-    etiqueta: [CONFIG.ASEGURADORA, CONFIG.CIUDAD].filter(Boolean).join(' · '),
+    // Cobertura, no sede: el hero anuncia hasta dónde se atiende (2-sep-2026).
+    etiqueta: [CONFIG.ASEGURADORA, CONFIG.COBERTURA || CONFIG.CIUDAD].filter(Boolean).join(' · '),
     titulo: 'Encuentra al agente', titulo_acento: 'que sí te explica',
     texto: 'Agentes con cédula vigente, cerca de ti. Ve su perfil, lee lo que '
          + 'dicen sus clientes y agenda una asesoría sin costo.',
@@ -894,12 +902,168 @@ function buscarCerca() {
   );
 }
 
+/* ---------------------------------------------------------------------------
+   Código postal — la vía sin permisos
+
+   El GPS es el mejor dato pero pide un permiso, y un permiso es una pantalla
+   donde el visitante se puede ir. El código postal lo escribe cualquiera en
+   tres segundos, no pide nada al navegador y es lo bastante fino para ordenar
+   por cercanía en una ciudad. Convive con el GPS, no lo sustituye: quien
+   quiera precisión de calle sigue teniendo «Cerca de mí».
+
+   LOS RANGOS SON REALES, no inventados. Verificados el 1-sep-2026 contra
+   micodigopostal.org (catálogo de SEPOMEX):
+     Guadalajara          44100–44990
+     Zapopan              45010–45245
+     San Pedro Tlaquepaque 45500–45638
+     Tlajomulco de Zúñiga  45640–45679
+   Y los CP concretos de las colonias donde están las oficinas:
+     Guadalajara Centro 44100 · Obrera Centro 44140 · Lafayette 44150 ·
+     Americana 44160 · Chapultepec Country 44620 · Providencia 44630 ·
+     Puerta de Hierro / Andares 45116
+
+   ⚠️ LIMITACIÓN, y conviene tenerla presente: los rangos de MUNICIPIO están
+   verificados uno por uno; los dos tramos finos de dentro de Guadalajara
+   —Chapultepec y Providencia— están EXTRAPOLADOS de los CP de arriba, porque
+   cargar el catálogo completo de SEPOMEX son miles de filas. En el peor caso
+   el visitante aparece en la zona vecina, a un par de kilómetros, y el orden
+   por cercanía se resiente un poco; nunca acaba en otra ciudad. Si algún día
+   se carga el catálogo oficial, esta tabla se borra entera.
+
+   El orden de la lista MANDA: gana el primer rango que case, así que los
+   tramos finos van antes que el del municipio que los contiene.
+   --------------------------------------------------------------------------- */
+/* Los rangos de CP de Jalisco. Cada entrada apunta a un LUGAR del mapa, y hay
+   dos clases de lugar:
+
+     · `zona`  — una de las nuestras, donde SÍ hay agentes. El punto no se
+                 escribe aquí: lo calcula `centroDeZona()` promediando a sus
+                 agentes, así nunca se desincroniza.
+     · `lat/lng` — una cabecera municipal donde todavía NO hay agentes. El
+                 punto es fijo porque no hay nadie de quien deducirlo.
+
+   Los rangos con nombre de municipio están VERIFICADOS uno por uno contra
+   micodigopostal.org (catálogo de SEPOMEX), el 1 y 2-sep-2026. Los cuatro
+   últimos son redes de seguridad por prefijo: Jalisco entero va de 44000 a
+   49999, y un CP que no caiga en ningún municipio conocido cae en la región
+   que le toca por su primer par de dígitos. Peor sería no reconocerlo.
+
+   ⚠️ DOS NIVELES DE PRECISIÓN, y conviene no confundirlos:
+     · Municipio  — verificado. El visitante acaba en su municipio real.
+     · Región     — aproximado. El visitante acaba en la cabecera de su región,
+                    que puede estar a decenas de km. Da igual para ordenar
+                    agentes que están todos en la ZMG, y se nota si algún día
+                    hay agentes repartidos por el estado. Entonces tocará
+                    cargar el catálogo de SEPOMEX completo y borrar esta tabla.
+
+   El orden MANDA: gana el primer rango que case, así que lo fino va antes que
+   lo grueso y las redes de seguridad van al final. */
+const CP_LUGARES = [
+  // ── Zona Metropolitana de Guadalajara — aquí están los 30 agentes ────────
+  { desde: 44140, hasta: 44189, zona: 'Chapultepec' },   // Obrera, Lafayette, Americana
+  { desde: 44600, hasta: 44699, zona: 'Providencia' },   // Providencia, Chapultepec Country
+  { desde: 44100, hasta: 44990, zona: 'Centro' },        // resto de Guadalajara
+  { desde: 45110, hasta: 45129, zona: 'Andares' },       // Puerta de Hierro
+  { desde: 45010, hasta: 45245, zona: 'Zapopan' },       // resto de Zapopan
+  { desde: 45500, hasta: 45638, zona: 'Tlaquepaque' },
+  { desde: 45640, hasta: 45679, zona: 'Tlajomulco' },
+
+  // ── Resto de Jalisco — sin agentes propios todavía ──────────────────────
+  { desde: 45400, hasta: 45429, lugar: 'Tonalá',              lat: 20.6242, lng: -103.2339 },
+  { desde: 45430, hasta: 45465, lugar: 'Zapotlanejo',         lat: 20.6222, lng: -103.0700 },
+  { desde: 45680, hasta: 45696, lugar: 'El Salto',            lat: 20.5167, lng: -103.1833 },
+  { desde: 45900, hasta: 45946, lugar: 'Chapala',             lat: 20.2953, lng: -103.1917 },
+  { desde: 46200, hasta: 46239, lugar: 'Colotlán',            lat: 22.1097, lng: -103.2681 },
+  { desde: 46600, hasta: 46729, lugar: 'Ameca',               lat: 20.5486, lng: -104.0431 },
+  { desde: 47400, hasta: 47539, lugar: 'Lagos de Moreno',     lat: 21.3557, lng: -101.9358 },
+  { desde: 47600, hasta: 47729, lugar: 'Tepatitlán',          lat: 20.8169, lng: -102.7639 },
+  { desde: 47780, hasta: 47899, lugar: 'Ocotlán',             lat: 20.3500, lng: -102.7667 },
+  { desde: 48260, hasta: 48399, lugar: 'Puerto Vallarta',     lat: 20.6534, lng: -105.2253 },
+  { desde: 48900, hasta: 48926, lugar: 'Autlán de Navarro',   lat: 19.7700, lng: -104.3667 },
+  { desde: 49000, hasta: 49113, lugar: 'Ciudad Guzmán',       lat: 19.7000, lng: -103.4667 },
+
+  // ── Redes de seguridad por región. Aproximadas, y por eso van al final ──
+  { desde: 46000, hasta: 46999, lugar: 'la región Valles',    lat: 20.5486, lng: -104.0431, aprox: true },
+  { desde: 47000, hasta: 47999, lugar: 'Los Altos',           lat: 20.8169, lng: -102.7639, aprox: true },
+  { desde: 48000, hasta: 48999, lugar: 'la costa de Jalisco', lat: 20.6534, lng: -105.2253, aprox: true },
+  { desde: 49000, hasta: 49999, lugar: 'el sur de Jalisco',   lat: 19.7000, lng: -103.4667, aprox: true },
+  { desde: 45000, hasta: 45999, lugar: 'la zona metropolitana', zona: 'Zapopan',            aprox: true },
+];
+
+function esCP(v) { return /^\d{5}$/.test(String(v || '').trim()); }
+
+function lugarDeCP(cp) {
+  const n = Number(String(cp).trim());
+  if (!Number.isFinite(n)) return null;
+  return CP_LUGARES.find((x) => n >= x.desde && n <= x.hasta) || null;
+}
+
+/* Nombre legible del sitio al que corresponde un CP, para el chip y los avisos. */
+function nombreDeCP(cp) {
+  const l = lugarDeCP(cp);
+  return l ? (l.zona || l.lugar) : null;
+}
+
+/* El centro de una zona propia se CALCULA promediando a sus agentes, en vez de
+   guardar otra tabla de coordenadas. Así nunca se desincroniza: si mañana
+   entra un agente nuevo en Providencia, el centro se recoloca solo. */
+function centroDeZona(zona) {
+  const dentro = AGENTES.filter((a) => a.zona === zona && a.lat != null && a.lng != null);
+  if (!dentro.length) return null;
+  return {
+    lat: dentro.reduce((s, a) => s + Number(a.lat), 0) / dentro.length,
+    lng: dentro.reduce((s, a) => s + Number(a.lng), 0) / dentro.length,
+  };
+}
+
+/* Traduce un CP a algo accionable:
+     nombre  — cómo se llama ese sitio, para decírselo al visitante
+     centro  — desde dónde medir las distancias
+     propia  — si ahí HAY agentes nuestros. Cuando es false, el sitio no puede
+               prometer cercanía y lo que ofrece es atención por videollamada.
+   Devuelve null si el CP no es de Jalisco: mejor decirlo que ordenar por una
+   distancia que no significa nada. */
+function ubicarPorCP(cp) {
+  const l = lugarDeCP(cp);
+  if (!l) return null;
+  const centro = l.zona ? centroDeZona(l.zona) : { lat: l.lat, lng: l.lng };
+  return {
+    nombre: l.zona || l.lugar,
+    centro,
+    propia: Boolean(l.zona),
+    aprox: Boolean(l.aprox),
+  };
+}
+
 function onBuscar(ev) {
   ev.preventDefault();
   const p = new URLSearchParams();
   const q = $('#searchInput') ? $('#searchInput').value.trim() : '';
   const ramo = $('#searchRamo') ? $('#searchRamo').value : '';
   const zona = $('#searchZona') ? $('#searchZona').value : '';
+  // Cinco dígitos en el buscador son un código postal, no un nombre. Se
+  // reutiliza el campo que ya existe en vez de añadir otro: un formulario con
+  // un hueco más es un formulario que la gente abandona antes.
+  if (esCP(q)) {
+    const u = ubicarPorCP(q);
+    if (u) {
+      p.set('cp', q);
+      if (u.centro) {
+        p.set('orden', 'cerca');
+        p.set('lat', u.centro.lat.toFixed(5));
+        p.set('lng', u.centro.lng.toFixed(5));
+      } else {
+        // Zona sin agentes: no hay distancia que calcular, pero sí zona.
+        p.set('zona', u.zona);
+      }
+      if (ramo) p.set('ramo', ramo);
+      location.href = 'agentes.html?' + p;
+      return;
+    }
+    showToast('No reconocemos ese código postal en Guadalajara. Elige tu zona.', 'error');
+    return;
+  }
+
   if (q) p.set('q', q);
   if (ramo) p.set('ramo', ramo);
   if (zona) p.set('zona', zona);
@@ -1032,6 +1196,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initPerfil();
   inyectarAvisoDemo();
   inyectarDemoLogin();
+  initEnlaceOlvide();
+  initAbrirAccesoPorHash();
+  await initRecuperar();
   await initPanelDirector();
   await initPanelAgente();
   await reflejarSesionEnPublico();
@@ -1039,6 +1206,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Marca en el navbar y el footer desde config: se cambia en un solo lugar.
   $$('[data-marca]').forEach((el) => { el.textContent = CONFIG.MARCA; });
   $$('[data-tagline]').forEach((el) => { el.textContent = CONFIG.TAGLINE; });
+  // Cobertura ≠ sede: la agencia está en una ciudad y atiende un estado.
+  $$('[data-cobertura]').forEach((el) => { el.textContent = CONFIG.COBERTURA || CONFIG.CIUDAD; });
   $$('[data-wa-central]').forEach((el) => {
     el.href = waLink(CONFIG.WHATSAPP_CENTRAL, 'Hola, quiero información sobre seguros.');
   });
@@ -1049,6 +1218,99 @@ document.addEventListener('DOMContentLoaded', async () => {
    =========================================================================== */
 const FILTROS = { q: '', zona: '', ramo: '', modalidad: '', disponible: '',
                   rating: '', distancia: '', orden: 'destacados' };
+
+/* El CP vive fuera de FILTROS a propósito: no filtra a nadie, solo dice desde
+   dónde se mide. Meterlo ahí lo habría convertido en un filtro que descarta
+   agentes, que es justo lo contrario de lo que hace. */
+let CP_BUSCADO = '';
+
+/* La ubicación del visitante NO se guarda en la base (CLAUDE.md §12), y el CP
+   tampoco: vive en esta variable y en la URL de esta navegación. */
+function aplicarCP(cp) {
+  const u = ubicarPorCP(cp);
+  if (!u) {
+    showToast('No reconocemos ese código postal en Guadalajara. Prueba con tu zona.', 'error');
+    return false;
+  }
+  CP_BUSCADO = cp;
+  if (!u.centro) {
+    // Zona nuestra pero vacía de agentes: no hay nada de dónde deducir el
+    // punto, así que se filtra por ella y se dice, en vez de fingir distancia.
+    FILTROS.zona = u.nombre;
+    if ($('#fZona')) $('#fZona').value = u.nombre;
+    showToast(`Sin agentes en ${u.nombre} todavía; te mostramos los de alrededor.`);
+    pintarDirectorio();
+    return true;
+  }
+
+  UBICACION_CLIENTE = u.centro;
+  FILTROS.orden = 'cerca';
+  if ($('#ordenSel')) $('#ordenSel').value = 'cerca';
+  if ($('#fDistancia')) $('#fDistancia').classList.remove('oculto');
+
+  /* Fuera de la ZMG no se puede prometer cercanía y decir «ordenado por
+     cercanía» sería burlarse de quien está en Puerto Vallarta. Se dice la
+     verdad —el equipo está en Guadalajara— y se ofrece lo que sí hay:
+     videollamada. El orden por distancia sigue sirviendo, porque pone
+     primero a quien le queda menos lejos. */
+  if (!u.propia) {
+    mostrarAvisoFuera(u.nombre);
+  } else {
+    quitarAvisoFuera();
+    showToast(`Ordenado por cercanía a ${u.nombre}.`);
+  }
+  pintarDirectorio();
+  return true;
+}
+
+/* Aviso para quien escribe un CP de fuera de la ZMG. Se construye desde JS y
+   no vive en agentes.html porque solo existe en ese caso; meterlo en el HTML
+   de las nueve pantallas sería markup muerto el 99% del tiempo.
+
+   Decir «no hay nadie en tu ciudad» y callarse deja al visitante en un
+   callejón. Se dice, y se ofrece de inmediato lo único que sí se puede
+   cumplir: los que atienden por videollamada. */
+function mostrarAvisoFuera(nombre) {
+  quitarAvisoFuera();
+  const chips = $('#dirChips');
+  if (!chips) return;
+  const cuantos = AGENTES.filter((a) => (a.modalidades || []).includes('videollamada')).length;
+  chips.insertAdjacentHTML('beforebegin', `
+    <div class="dir-aviso-fuera" id="dirAvisoFuera">
+      <i class="fas fa-circle-info"></i>
+      <div>
+        <b>Todavía no tenemos agente en ${esc(nombre)}.</b>
+        El equipo está en Guadalajara, y ${cuantos} de ellos
+        ${cuantos === 1 ? 'atiende' : 'atienden'} por videollamada — misma
+        asesoría, misma cédula, sin que te muevas.
+        <button type="button" class="btn btn-outline btn-sm" onclick="soloVideollamada()">
+          <i class="fas fa-video"></i> Ver quién atiende en línea
+        </button>
+      </div>
+    </div>`);
+}
+
+function quitarAvisoFuera() {
+  const el = $('#dirAvisoFuera');
+  if (el) el.remove();
+}
+
+function soloVideollamada() {
+  FILTROS.modalidad = 'videollamada';
+  if ($('#fModalidad')) $('#fModalidad').value = 'videollamada';
+  pintarDirectorio();
+}
+
+function quitarCP() {
+  CP_BUSCADO = '';
+  UBICACION_CLIENTE = null;
+  quitarAvisoFuera();
+  if (FILTROS.orden === 'cerca') {
+    FILTROS.orden = 'destacados';
+    if ($('#ordenSel')) $('#ordenSel').value = 'destacados';
+  }
+  pintarDirectorio();
+}
 
 function initDirectorio() {
   const grid = $('#dirGrid');
@@ -1063,6 +1325,12 @@ function initDirectorio() {
   if (p.get('lat') && p.get('lng')) {
     UBICACION_CLIENTE = { lat: Number(p.get('lat')), lng: Number(p.get('lng')) };
   }
+  // El CP no filtra: ubica. Se guarda solo para poder decir de dónde salió el
+  // orden, y para que el chip se pueda quitar como cualquier otro filtro.
+  CP_BUSCADO = esCP(p.get('cp')) ? p.get('cp') : '';
+  // Un CP en el buscador es una ubicación, no un texto que buscar entre los
+  // nombres: dejarlo en FILTROS.q no encontraría a nadie y saldría vacío.
+  if (esCP(FILTROS.q)) FILTROS.q = '';
 
   $('#fZona').innerHTML = CONFIG.ZONAS
     .map((z, i) => `<option value="${i === 0 ? '' : esc(z)}">${i === 0 ? 'Todas las zonas' : esc(z)}</option>`).join('');
@@ -1071,7 +1339,7 @@ function initDirectorio() {
   $('#fModalidad').innerHTML = '<option value="">Cualquier modalidad</option>' +
     Object.entries(MODALIDADES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
 
-  $('#dirBusqueda').value = FILTROS.q;
+  $('#dirBusqueda').value = CP_BUSCADO || FILTROS.q;
   $('#fZona').value = FILTROS.zona;
   $('#fRamo').value = FILTROS.ramo;
   $('#ordenSel').value = FILTROS.orden;
@@ -1087,7 +1355,12 @@ function initDirectorio() {
   let t;
   $('#dirBusqueda').addEventListener('input', (e) => {
     clearTimeout(t);
-    t = setTimeout(() => { FILTROS.q = e.target.value.trim(); pintarDirectorio(); }, 250);
+    t = setTimeout(() => {
+      const v = e.target.value.trim();
+      if (esCP(v)) { aplicarCP(v); return; }
+      if (CP_BUSCADO && !v) quitarCP();
+      FILTROS.q = v; pintarDirectorio();
+    }, 250);
   });
 
   $('#btnLimpiar').addEventListener('click', limpiarFiltros);
@@ -1096,6 +1369,13 @@ function initDirectorio() {
   $('#dirChips').addEventListener('click', (e) => {
     const chip = e.target.closest('[data-quitar]');
     if (!chip) return;
+    // El CP no vive en FILTROS: deshacerlo es devolver el orden y olvidar la
+    // ubicación, no vaciar un campo.
+    if (chip.dataset.quitar === 'cp') {
+      if ($('#dirBusqueda')) $('#dirBusqueda').value = '';
+      quitarCP();
+      return;
+    }
     FILTROS[chip.dataset.quitar] = '';
     const sel = { zona: '#fZona', ramo: '#fRamo', modalidad: '#fModalidad',
                   disponible: '#fDisponible', rating: '#fRating',
@@ -1110,10 +1390,22 @@ function initDirectorio() {
   });
 
   if (UBICACION_CLIENTE) $('#fDistancia').classList.remove('oculto');
+  // Si se llegó aquí desde la portada con un CP de fuera, el aviso tiene que
+  // salir igual que si se hubiera escrito aquí mismo.
+  if (CP_BUSCADO) {
+    const u = ubicarPorCP(CP_BUSCADO);
+    if (u && !u.propia) mostrarAvisoFuera(u.nombre);
+  }
   pintarDirectorio();
 }
 
 function limpiarFiltros() {
+  // «Limpiar» tiene que dejar la pantalla como recién abierta, y eso incluye
+  // el orden por cercanía: si no, quedaba un orden por distancia sin ningún
+  // chip que explicara de dónde salía.
+  CP_BUSCADO = '';
+  UBICACION_CLIENTE = null;
+  quitarAvisoFuera();
   Object.keys(FILTROS).forEach((k) => { FILTROS[k] = k === 'orden' ? 'destacados' : ''; });
   ['#fZona', '#fRamo', '#fModalidad', '#fDisponible', '#fRating', '#fDistancia', '#dirBusqueda']
     .forEach((s) => { if ($(s)) $(s).value = ''; });
@@ -1257,6 +1549,9 @@ function pintarDirectorio() {
     disponible: FILTROS.disponible && 'Disponibles ahora',
     rating: FILTROS.rating && `${FILTROS.rating}★ o más`,
     distancia: FILTROS.distancia && `hasta ${FILTROS.distancia} km`,
+    // Dice la zona además del número: «45116» no le dice nada a nadie, pero
+    // «CP 45116 · Andares» deja ver de inmediato si el visitante se equivocó.
+    cp: CP_BUSCADO && `CP ${CP_BUSCADO} · ${nombreDeCP(CP_BUSCADO) || 'tu zona'}`,
   };
   $('#dirChips').innerHTML = Object.entries(etiquetas)
     .filter(([, v]) => v)
@@ -3584,13 +3879,28 @@ const SECCIONES_AGENTE = {
     return `
       <h1 class="admin-page-title">Configuración</h1>
       <section class="admin-card">
-        <h2>Acceso</h2>
+        <h2>Tu acceso</h2>
         <div class="form-group">
-          <label class="form-label">Correo <i class="fas fa-lock"></i></label>
-          <input class="form-input" value="${esc(YO_AGENTE.email || 'tu@correo.mx')}" readonly />
+          <label class="form-label">Correo de acceso <i class="fas fa-lock"></i></label>
+          <input class="form-input" value="${esc(CORREO_ACCESO || YO_AGENTE.email || 'tu@correo.mx')}" readonly />
         </div>
         <p class="admin-nota">
-          Tu correo y tu contraseña los administra tu director, igual que tu cédula.
+          Tu correo de acceso lo administra tu director, igual que tu nombre y
+          tu cédula. Si hay un error, avísale.
+        </p>
+        <div class="cfg-dato">
+          <div>
+            <span class="form-label">Contraseña</span>
+            <b>••••••••</b>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="abrirCambioPassword()">
+            <i class="fas fa-key"></i> Cambiar
+          </button>
+        </div>
+        <p class="admin-nota">
+          La contraseña sí es tuya y solo tuya: cámbiala cuando quieras y no se
+          la des a nadie, tampoco a tu director. Si se te olvida, en la pantalla
+          de acceso está «¿Olvidaste tu contraseña?».
         </p>
       </section>
       <section class="admin-card">
@@ -3803,6 +4113,8 @@ const RAMOS_DESC = {
   empresarial:    'Tu negocio: inventario, equipo, responsabilidad civil y las unidades de reparto.',
   educativo:      'Un plan que junta dinero para la universidad de tus hijos, pase lo que pase.',
   fianzas:        'Garantiza ante un tercero que vas a cumplir un contrato. Obligatorio en obra pública.',
+  ahorro:         'Guardas una cantidad cada mes y crece con los años, con la aseguradora respondiendo por el capital.',
+  retiro:         'Para cuando dejes de trabajar. Tiene ventajas fiscales que una cuenta de ahorro normal no da.',
 };
 
 function initRamos() {
@@ -3853,6 +4165,8 @@ function initRamos() {
     { txt: 'Seguro de vida con ahorro',    ramo: 'vida' },
     { txt: 'Fianza de cumplimiento',       ramo: 'fianzas' },
     { txt: 'Casa contra sismo',            ramo: 'hogar' },
+    { txt: 'Plan personal de retiro',      ramo: 'retiro' },
+    { txt: 'Ahorro que dé rendimiento',    ramo: 'ahorro' },
     { txt: 'Cambiar de aseguradora',       ramo: '' },
     { txt: 'Revisar mi póliza actual',     ramo: '' },
   ];
@@ -4217,8 +4531,15 @@ const RAMO_SINONIMOS = {
   gastos_medicos: ['gastos medicos', 'gastos médicos', 'gmm', 'salud', 'gastos medicos mayores', 'medico', 'médico'],
   hogar: ['hogar', 'casa', 'casa habitacion', 'casa habitación', 'daños', 'danos'],
   empresarial: ['empresarial', 'empresa', 'negocio', 'pyme', 'responsabilidad civil', 'rc'],
-  educativo: ['educativo', 'educacion', 'educación', 'universitario', 'ahorro', 'escolar'],
+  /* 'ahorro' se le quitó a educativo (1-sep-2026): ahora es un ramo propio y
+     dejarlo aquí se lo robaba, porque gana el primero que coincide. A cambio
+     entra 'universidad', que es como lo escribe la gente de verdad. */
+  educativo: ['educativo', 'educacion', 'educación', 'universitario', 'universidad', 'escolar'],
   fianzas: ['fianzas', 'fianza', 'cumplimiento'],
+  /* Van al final a propósito: 'ahorro para la universidad' tiene que caer en
+     educativo, no aquí. 'dotal' se queda en vida, que es donde pertenece. */
+  ahorro: ['ahorro', 'ahorro protegido', 'inversion', 'inversión', 'trasciende', 'consolida'],
+  retiro: ['retiro', 'ppr', 'plan personal de retiro', 'pension', 'pensión', 'jubilacion', 'jubilación'],
 };
 
 function aRamo(v) {
@@ -5345,8 +5666,9 @@ function abrirCambioPassword() {
   modalCuenta('modalPass', 'Cambiar contraseña', `
     ${campoPassword('passActual', 'Contraseña actual', 'current-password')}
     ${campoPassword('passNueva', 'Contraseña nueva', 'new-password',
-      'Mínimo 8 caracteres. Guárdala en tu gestor de contraseñas: si la pierdes, ' +
-      'la recuperación va por correo y depende de que el correo de acceso sea una bandeja real.')}
+      'Mínimo 8 caracteres. Guárdala en tu gestor de contraseñas. Si se te olvida, ' +
+      'se recupera con «¿Olvidaste tu contraseña?» en la pantalla de acceso, y ese ' +
+      'enlace llega al correo de acceso: tiene que ser una bandeja que abras de verdad.')}
     ${campoPassword('passRepite', 'Repite la nueva', 'new-password')}`, 'Cambiar contraseña');
 
   $('#modalPassOk').addEventListener('click', async () => {
@@ -7081,4 +7403,457 @@ async function subirImagenBanner(archivo, i, input) {
     if (etiqueta) etiqueta.innerHTML = textoPrevio;
     input.value = '';
   }
+}
+
+/* ===========================================================================
+   33. Recuperación de contraseña
+
+   Dos caminos, y hacen falta los dos porque cada uno tapa el hueco del otro:
+
+     · «Olvidé mi contraseña» (aquí) — sirve justo cuando ya NO puedes entrar,
+       que es el caso que importa. Va por correo, así que depende de que el
+       correo de acceso sea una bandeja real.
+     · Cambiarla desde el panel (`abrirCambioPassword()`, sección 23) — no
+       depende del correo, pero exige poder entrar.
+
+   Decisión del 1-sep-2026: el agente cambia la suya. Eso corrige la §11 de
+   CLAUDE.md, heredada del proyecto de referencia, que decía que las
+   credenciales las administra el Director. El correo de acceso SÍ lo sigue
+   administrando él; la contraseña no tiene por qué conocerla nadie más.
+
+   Lo que hace falta del lado de Supabase, y sin esto el enlace no llega:
+     1. Authentication → URL Configuration → Redirect URLs: dar de alta
+        `https://pakogq.github.io/asegura-demo/recuperar.html` y
+        `http://localhost:8080/recuperar.html`. Una URL fuera de la lista se
+        ignora y el correo manda al Site URL, donde no hay nada que la atienda.
+     2. SMTP propio. El remitente de fábrica solo escribe a miembros del
+        proyecto y va limitado a unos pocos correos por hora: sirve para probar
+        con la cuenta de Paco y para nada más.
+   =========================================================================== */
+
+/* La página vive junto a las demás, y el sitio NO está en la raíz del dominio
+   (§PWA): se resuelve contra la URL actual en vez de escribir una absoluta. */
+function urlRecuperar() {
+  return new URL('recuperar.html', location.href).href;
+}
+
+/* El enlace se INYECTA en el modal de acceso en vez de escribirlo en los
+   nueve HTML que lo repiten. Nueve copias del mismo markup es exactamente
+   donde una se queda atrás. */
+function initEnlaceOlvide() {
+  const modal = $('#loginModal');
+  if (!modal || modal.querySelector('.login-olvide')) return;
+  const btn = modal.querySelector('[onclick*="doLogin"]');
+  if (!btn) return;
+  btn.insertAdjacentHTML('afterend', `
+    <button type="button" class="login-olvide" onclick="abrirOlvide()">
+      ¿Olvidaste tu contraseña?
+    </button>`);
+}
+
+function abrirOlvide() {
+  closeModal('loginModal');   // dos overlays encimados se ven como un error
+  const previo = ($('#loginEmail') || {}).value || '';
+  modalCuenta('modalOlvide', 'Recuperar contraseña', `
+    <p class="modal-texto">Escribe el correo con el que entras. Te llega un
+      enlace para poner una contraseña nueva.</p>
+    <div class="form-group">
+      <label class="form-label" for="olvideMail">Correo de acceso</label>
+      <input class="form-input" id="olvideMail" type="email" autocomplete="username"
+             value="${esc(previo.trim())}" />
+    </div>
+    <p class="modal-texto imp-nota">
+      El enlace vale una hora y sirve una sola vez. Si no llega, revisa la
+      carpeta de correo no deseado.
+    </p>`, 'Enviar enlace');
+
+  $('#modalOlvideOk').addEventListener('click', async () => {
+    const aviso = $('#modalOlvideAviso');
+    const mail  = $('#olvideMail').value.trim();
+    const fallar = (m) => { aviso.innerHTML = `<p class="imp-error">${esc(m)}</p>`; };
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return fallar('Ese correo no tiene forma válida.');
+    if (!window.sbClient) return fallar('El sistema todavía no está conectado a su base de datos.');
+
+    const btn = $('#modalOlvideOk');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando…';
+    aviso.innerHTML = '';
+
+    const { error } = await sbClient.auth.resetPasswordForEmail(mail, {
+      redirectTo: urlRecuperar(),
+    });
+
+    /* Un «ese correo no existe» le diría a cualquiera qué cuentas hay dadas de
+       alta. El mensaje es el mismo exista o no, que es además lo que responde
+       Supabase. Solo se distinguen los fallos que el usuario puede resolver:
+       sin internet, o demasiados intentos seguidos. */
+    if (error && /rate limit|over_email_send|too many/i.test(error.message || '')) {
+      btn.disabled = false;
+      btn.innerHTML = 'Enviar enlace';
+      return fallar('Se pidieron demasiados enlaces seguidos. Espera unos minutos.');
+    }
+    if (error && /failed to fetch|network/i.test(error.message || '')) {
+      btn.disabled = false;
+      btn.innerHTML = 'Enviar enlace';
+      return fallar('No hay conexión con el servidor. Revisa tu internet.');
+    }
+    if (error) console.warn('resetPasswordForEmail:', error.message);
+
+    aviso.innerHTML = `<p class="imp-ok"><i class="fas fa-circle-check"></i>
+      Si <b>${esc(mail)}</b> es una cuenta del equipo, ya va en camino el enlace.
+      Ábrelo desde este mismo teléfono o computadora.</p>`;
+    btn.remove();
+  });
+}
+
+/* ---------------------------------------------------------------------------
+   La página recuperar.html
+
+   El enlace de Supabase pasa por su /auth/v1/verify y aterriza aquí con los
+   tokens en el HASH. supabase-js los lee y LIMPIA la barra de direcciones en
+   cuanto arranca, así que para cuando corre este código el hash ya no está:
+   recuperar.html lo guarda en `window.__RECU_HASH` con un <script> puesto
+   ANTES del CDN. Sin eso no hay forma de distinguir «vengo de un enlace» de
+   «entré a la página a mano».
+   --------------------------------------------------------------------------- */
+
+function pintarRecuperar(html) {
+  const caja = $('#recCaja');
+  if (caja) caja.innerHTML = html;
+}
+
+function recAvisoLink(titulo, texto) {
+  return `
+    <h1>${esc(titulo)}</h1>
+    <p>${texto}</p>
+    <a class="btn btn-acento btn-lg" href="index.html#acceso">
+      <i class="fas fa-right-to-bracket"></i> Ir al acceso
+    </a>`;
+}
+
+/* supabase-js procesa el hash de forma asíncrona al crearse el cliente: no hay
+   evento que esperar sin condiciones, así que se sondea un rato corto. Devuelve
+   null si el enlace ya se usó o caducó — Supabase no da sesión y punto. */
+async function esperarSesionRecuperacion(msMax = 8000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < msMax) {
+    const { data } = await sbClient.auth.getSession();
+    if (data && data.session) return data.session;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return null;
+}
+
+async function initRecuperar() {
+  if (!$('#recCaja')) return;   // solo en recuperar.html
+
+  const hash   = String(window.__RECU_HASH || '').replace(/^#/, '');
+  const params = new URLSearchParams(hash);
+  const query  = new URLSearchParams(location.search);
+
+  if (!window.sbClient) {
+    pintarRecuperar(recAvisoLink('No hay conexión con la base',
+      'El sitio no está conectado a su base de datos, así que no se puede cambiar nada. Avisa a quien lo administra.'));
+    return;
+  }
+
+  /* Supabase manda el motivo en el propio hash cuando el enlace ya no sirve.
+     Decirlo es la diferencia entre pedir otro y probar el mismo diez veces. */
+  if (params.get('error') || params.get('error_code')) {
+    const codigo = params.get('error_code') || '';
+    const vencido = /expired|otp_expired/i.test(codigo + ' ' + (params.get('error_description') || ''));
+    pintarRecuperar(recAvisoLink(
+      vencido ? 'El enlace ya venció' : 'Ese enlace no sirve',
+      vencido
+        ? 'Los enlaces valen una hora y se usan una sola vez. Pide otro desde «¿Olvidaste tu contraseña?».'
+        : 'Puede que se haya usado ya, o que se haya cortado al copiarlo. Pide uno nuevo desde «¿Olvidaste tu contraseña?».'));
+    return;
+  }
+
+  const vieneDeEnlace = params.has('access_token') || params.get('type') === 'recovery' || query.has('code');
+  if (!vieneDeEnlace) {
+    pintarRecuperar(recAvisoLink('Aquí no hay nada que hacer todavía',
+      'Esta página solo funciona abriendo el enlace que te llega por correo. Pídelo desde «¿Olvidaste tu contraseña?» en la pantalla de acceso.'));
+    return;
+  }
+
+  /* Rama PKCE: hoy el proyecto usa el flujo implícito (tokens en el hash), pero
+     si algún día se activa PKCE el enlace llega con ?code= y sin hash. */
+  if (query.has('code') && sbClient.auth.exchangeCodeForSession) {
+    try { await sbClient.auth.exchangeCodeForSession(query.get('code')); }
+    catch (e) { console.warn('exchangeCodeForSession:', e.message); }
+  }
+
+  const sesion = await esperarSesionRecuperacion();
+  if (!sesion) {
+    pintarRecuperar(recAvisoLink('El enlace ya no es válido',
+      'Vale una hora y sirve una sola vez. Pide otro desde «¿Olvidaste tu contraseña?» en la pantalla de acceso.'));
+    return;
+  }
+
+  const correo = (sesion.user && sesion.user.email) || '';
+  pintarRecuperar(`
+    <h1>Pon tu contraseña nueva</h1>
+    <p>Vas a cambiar la de <b>${esc(correo || 'tu cuenta')}</b>.</p>
+    <div class="rec-form">
+      ${campoPassword('recNueva', 'Contraseña nueva', 'new-password',
+        'Mínimo 8 caracteres. Guárdala en tu gestor de contraseñas.')}
+      ${campoPassword('recRepite', 'Repite la nueva', 'new-password')}
+      <button class="btn btn-acento btn-lg w-full" id="recOk">
+        <i class="fas fa-key"></i> Guardar contraseña
+      </button>
+      <div id="recAviso"></div>
+    </div>`);
+
+  $('#recOk').addEventListener('click', async () => {
+    const aviso  = $('#recAviso');
+    const nueva  = $('#recNueva').value;
+    const repite = $('#recRepite').value;
+    const fallar = (m) => { aviso.innerHTML = `<p class="imp-error">${esc(m)}</p>`; };
+
+    if (nueva.length < 8) return fallar('Tiene que tener al menos 8 caracteres.');
+    if (nueva !== repite) return fallar('Las dos no coinciden.');
+
+    const btn = $('#recOk');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
+    aviso.innerHTML = '';
+    try {
+      const { error } = await sbClient.auth.updateUser({ password: nueva });
+      if (error) throw error;
+
+      /* Se cierra la sesión que abrió el enlace y se le pide entrar. Así la
+         contraseña nueva queda probada de verdad, y un enlace reenviado a
+         quien no debe no deja una sesión viva rondando. `signOut()` es una
+         promesa: se espera antes de pintar nada (§20). */
+      try { await sbClient.auth.signOut(); } catch (e) { /* la sesión local ya no importa */ }
+
+      pintarRecuperar(`
+        <h1>Listo</h1>
+        <p>Tu contraseña quedó cambiada. Entra con la nueva.</p>
+        <a class="btn btn-acento btn-lg" href="index.html#acceso">
+          <i class="fas fa-right-to-bracket"></i> Iniciar sesión
+        </a>`);
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-key"></i> Guardar contraseña';
+      // Supabase rechaza por su cuenta las contraseñas cortas o repetidas;
+      // su mensaje dice cuál de las dos, y eso es más útil que un genérico.
+      fallar(/same.*password/i.test(e.message || '')
+        ? 'Esa es la contraseña que ya tenías. Escribe una distinta.'
+        : (e.message || 'No se pudo cambiar.'));
+    }
+  });
+}
+
+/* Al volver del correo se aterriza en la portada, y pedirle al usuario que
+   además busque el botón de acceso sobra. `#acceso` abre el modal solo. */
+function initAbrirAccesoPorHash() {
+  if (location.hash === '#acceso' && $('#loginModal')) openModal('loginModal');
+}
+
+/* ===========================================================================
+   34. «Asígnenme un agente»
+
+   La landing del externo (§18 de CLAUDE.md) hace una cosa mejor que nuestro
+   directorio: al cliente que no quiere comparar treinta perfiles le resuelve
+   la elección. Pide tres datos y asigna. Nuestro directorio, en cambio, le
+   pone treinta tarjetas delante y le dice «tú verás».
+
+   Se copia la idea, no el método, porque el método tiene dos defectos:
+
+     · Pide nombre y WhatsApp ANTES de enseñar nada. Aquí no hace falta: el
+       visitante ve a quién le tocó sin dejar un solo dato, y decide después.
+       Sus datos son suyos hasta que agenda.
+     · No dice a quién le asignó ni por qué. Aquí se enseña el agente completo
+       —foto, cédula, zona, calificación— y los MOTIVOS de la elección. Un
+       cliente que entiende por qué le tocó ese agente llega distinto a la cita.
+
+   Y una tercera cosa, que es del Director más que del cliente: entre agentes
+   parejos se reparte al azar. Si el criterio fuera determinista, el mejor
+   colocado se llevaría todas las asignaciones y el resto del equipo no vería
+   una sola cita del directorio.
+   =========================================================================== */
+
+/* Puntuación explicable: cada sumando tiene su motivo en palabras, y son los
+   mismos que se le enseñan al visitante. Si algún día hay que defender por qué
+   le tocó Ana y no Luis, la respuesta está aquí y no en una caja negra. */
+function puntuarAgente(a, opciones) {
+  const { ramo, ubicacion } = opciones;
+  let puntos = 0;
+  const motivos = [];
+
+  if (ramo && (a.especialidades || []).includes(ramo)) {
+    puntos += 40;
+    motivos.push(`Es su especialidad: ${(RAMOS[ramo] || {}).label || ramo}`);
+  } else if (ramo && (a.ramos || []).includes(ramo)) {
+    puntos += 25;
+    motivos.push(`Maneja ${(RAMOS[ramo] || {}).label || ramo}`);
+  }
+
+  if (a.disponible) {
+    puntos += 20;
+    motivos.push('Tiene la agenda abierta hoy');
+  }
+
+  if (ubicacion && a.lat != null && a.lng != null) {
+    const km = distanciaKm(ubicacion.lat, ubicacion.lng, a.lat, a.lng);
+    // Cerca suma mucho; lejos no resta, porque en media Jalisco no hay nadie y
+    // penalizar la distancia dejaría a esos visitantes sin nadie «bueno».
+    puntos += Math.max(0, 25 - km);
+    motivos.push(km < 1 ? 'A menos de un kilómetro de ti'
+                        : `A ${km.toFixed(1)} km de donde estás`);
+  }
+
+  if (a.calificacion) {
+    puntos += Number(a.calificacion) * 3;
+    if (Number(a.calificacion) >= 4.5) {
+      motivos.push(`${Number(a.calificacion).toFixed(1)}★ de ${a.num_resenas || 0} clientes`);
+    }
+  }
+
+  if (a.verificado) {
+    puntos += 5;
+    motivos.push('Cédula verificada por el Director');
+  }
+
+  return { puntos, motivos };
+}
+
+function elegirAgente(opciones) {
+  const candidatos = AGENTES
+    .filter((a) => !opciones.ramo || (a.ramos || []).includes(opciones.ramo))
+    /* Si el visitante está fuera de la zona metropolitana, la única forma real
+       de atenderlo es en línea. Asignarle a alguien que solo recibe en oficina
+       y decirle «te atiende en línea» sería mentirle a 190 km de distancia. */
+    .filter((a) => !opciones.soloVideo || (a.modalidades || []).includes('videollamada'))
+    .map((a) => ({ agente: a, ...puntuarAgente(a, opciones) }))
+    .sort((x, y) => y.puntos - x.puntos);
+
+  if (!candidatos.length) return null;
+
+  /* Empatar por los pelos no debería decidir quién come. Se toma a los que
+     están dentro de un margen del mejor y se sortea entre ellos: el visitante
+     recibe a alguien igual de bueno, y el equipo se reparte las citas. */
+  const techo = candidatos[0].puntos;
+  const parejos = candidatos.filter((c) => c.puntos >= techo - 8);
+  return parejos[Math.floor(Math.random() * parejos.length)];
+}
+
+/* Punto de entrada desde los botones. Si ya se sabe dónde está el visitante
+   —porque escribió su CP o dio ubicación— se asigna directo; si no, se le
+   pregunta lo mínimo. */
+function asignarAgente(ramoPreferido) {
+  const ramo = ramoPreferido
+    || ($('#searchRamo') && $('#searchRamo').value)
+    || FILTROS.ramo || '';
+
+  if (UBICACION_CLIENTE) { pintarAsignado(ramo, UBICACION_CLIENTE); return; }
+  pedirCPParaAsignar(ramo);
+}
+
+function pedirCPParaAsignar(ramo) {
+  const viejo = $('#modalAsignar');
+  if (viejo) viejo.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="modalAsignar">
+      <div class="modal" id="modalAsignarCaja">
+        <div class="modal-header">
+          <h3 class="modal-title">Te buscamos agente</h3>
+          <button class="modal-close" onclick="closeModal('modalAsignar')"><i class="fas fa-times"></i></button>
+        </div>
+        <p class="modal-sub">Con tu código postal basta. No pedimos tu nombre
+          ni tu teléfono: eso lo decides tú si agendas.</p>
+        <div class="form-group">
+          <label class="form-label" for="asigCP">Tu código postal</label>
+          <input class="form-input" id="asigCP" type="text" inputmode="numeric"
+                 maxlength="5" placeholder="44630" autocomplete="postal-code" />
+        </div>
+        <div id="asigAviso"></div>
+        <button class="btn btn-acento w-full" id="asigOk">
+          <i class="fas fa-wand-magic-sparkles"></i> Buscar mi agente
+        </button>
+        <button type="button" class="login-olvide" onclick="closeModal('modalAsignar');location.href='agentes.html'">
+          Prefiero verlos todos
+        </button>
+      </div>
+    </div>`);
+  openModal('modalAsignar');
+
+  const lanzar = () => {
+    const cp = $('#asigCP').value.trim();
+    const aviso = $('#asigAviso');
+    if (!esCP(cp)) {
+      aviso.innerHTML = '<p class="imp-error">Son cinco dígitos, como 44630.</p>';
+      return;
+    }
+    const u = ubicarPorCP(cp);
+    if (!u || !u.centro) {
+      aviso.innerHTML = '<p class="imp-error">Ese código postal no es de Jalisco. Si estás fuera, escríbenos por WhatsApp.</p>';
+      return;
+    }
+    CP_BUSCADO = cp;
+    UBICACION_CLIENTE = u.centro;
+    pintarAsignado(ramo, u.centro, u);
+  };
+  $('#asigOk').addEventListener('click', lanzar);
+  $('#asigCP').addEventListener('keydown', (e) => { if (e.key === 'Enter') lanzar(); });
+  $('#asigCP').focus();
+}
+
+function pintarAsignado(ramo, ubicacion, lugar) {
+  const fuera = Boolean(lugar && !lugar.propia);
+  const elegido = elegirAgente({ ramo, ubicacion, soloVideo: fuera });
+  const caja = $('#modalAsignarCaja');
+
+  if (!elegido) {
+    // Se dice cuál de las dos condiciones falló: sin eso, el visitante no sabe
+    // si quitar el producto o si es que está demasiado lejos.
+    const html = fuera
+      ? `<p class="imp-error">Nadie del equipo atiende ese producto por
+         videollamada todavía. Escríbenos por WhatsApp y lo resolvemos.</p>`
+      : `<p class="imp-error">No encontramos a nadie con ese perfil. Prueba sin
+         filtro de producto.</p>`;
+    if (caja) $('#asigAviso').innerHTML = html;
+    else showToast('No encontramos a nadie con ese perfil.', 'error');
+    return;
+  }
+
+  const a = elegido.agente;
+  const cuerpo = `
+    <div class="modal-header">
+      <h3 class="modal-title">Tu agente</h3>
+      <button class="modal-close" onclick="closeModal('modalAsignar')"><i class="fas fa-times"></i></button>
+    </div>
+    ${fuera ? `<p class="modal-sub">Todavía no hay agente en ${esc(lugar.nombre)},
+       así que te asignamos al que mejor te puede atender en línea.</p>` : ''}
+    <div class="asig-agente">
+      <img src="${esc(a.foto)}" alt="${esc(a.nombre)}" />
+      <div>
+        <h4>${esc(a.nombre)} ${a.verificado ? '<i class="fas fa-circle-check ver-badge"></i>' : ''}</h4>
+        <p class="asig-titulo">${esc(a.titulo || '')}</p>
+        <p class="asig-meta"><i class="fas fa-location-dot"></i> ${esc(a.zona || '')}
+           · Cédula ${esc(a.cedula || '—')}</p>
+      </div>
+    </div>
+    <ul class="asig-motivos">
+      ${elegido.motivos.map((m) => `<li><i class="fas fa-check"></i> ${esc(m)}</li>`).join('')}
+    </ul>
+    <a class="btn btn-acento w-full" href="perfil.html?a=${esc(a.slug)}">
+      <i class="fas fa-calendar-check"></i> Ver su perfil y agendar
+    </a>
+    <button type="button" class="login-olvide" id="asigOtro">Enséñame otro</button>`;
+
+  if (caja) {
+    caja.innerHTML = cuerpo;
+  } else {
+    document.body.insertAdjacentHTML('beforeend',
+      `<div class="modal-overlay" id="modalAsignar"><div class="modal" id="modalAsignarCaja">${cuerpo}</div></div>`);
+    openModal('modalAsignar');
+  }
+  // «Enséñame otro» vuelve a sortear: como los parejos se eligen al azar,
+  // insistir da otro nombre en vez de repetir el mismo eternamente.
+  const otro = $('#asigOtro');
+  if (otro) otro.addEventListener('click', () => pintarAsignado(ramo, ubicacion, lugar));
 }

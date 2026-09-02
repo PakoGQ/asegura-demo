@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Agentes de seguros en Guadalajara — Vaxti</title>
+  <title>Agentes de seguros en Jalisco — Vaxti</title>
   <meta name="description" content="Directorio de agentes de seguros con cédula vigente. Filtra por zona, tipo de seguro y disponibilidad, u ordena por cercanía a tu ubicación." />
   <meta name="theme-color" content="#00224f" />
   <link rel="icon" type="image/png" href="logo-icono.png" />
@@ -71,12 +71,15 @@
   <!-- ── Encabezado ── -->
   <header class="dir-head">
     <div>
-      <h1 class="dir-titulo">Agentes en <span class="acento">Guadalajara</span></h1>
+      <h1 class="dir-titulo">Agentes en <span class="acento" data-cobertura>Jalisco</span></h1>
       <p class="dir-sub"><strong id="resultsCount">0</strong> agentes · asesoría sin costo</p>
     </div>
     <div class="dir-controles">
       <button class="btn btn-outline btn-sm" id="btnCerca">
         <i class="fas fa-location-crosshairs"></i> Cerca de mí
+      </button>
+      <button class="btn btn-outline btn-sm" onclick="asignarAgente()">
+        <i class="fas fa-wand-magic-sparkles"></i> Asígnenme uno
       </button>
       <select id="ordenSel" class="dir-select" aria-label="Ordenar por">
         <option value="destacados">Destacados primero</option>
@@ -93,7 +96,7 @@
   <div class="agentes-search-wrap">
     <i class="fas fa-search agentes-search-icon"></i>
     <input type="search" id="dirBusqueda" class="agentes-search-input"
-           placeholder="Busca por nombre, especialidad o zona…" autocomplete="off" />
+           placeholder="Nombre, especialidad, zona o tu código postal…" autocomplete="off" />
   </div>
 
   <!-- ── Filtros ── -->
