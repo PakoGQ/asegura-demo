@@ -7664,6 +7664,127 @@ details.faq-item[open] .faq-a {
 .asig-motivos li { font-size: .84rem; color: var(--t2); display: flex; gap: .5rem; align-items: baseline; }
 .asig-motivos i { color: var(--green); font-size: .72rem; }
 
+/* ── El asistente ──────────────────────────────────────────────────────────
+   Chat dentro del modal de asignación. Deliberadamente sobrio: esto recibe a
+   alguien que va a contar lo que gana, con quién vive o qué enfermedad tiene.
+   Una interfaz de juguete ahí dentro resta confianza en vez de sumarla.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* La invitación, arriba del atajo por código postal. */
+.ia-invita {
+  display: flex; align-items: center; gap: .85rem; width: 100%;
+  padding: .9rem 1rem; margin-bottom: .2rem; text-align: left;
+  background: var(--acento-suave); border: 1px solid var(--border-h);
+  border-radius: var(--r-md); cursor: pointer; font: inherit;
+  transition: background .2s ease, transform .2s ease;
+}
+.ia-invita:hover { background: rgba(254,96,49,.16); transform: translateY(-1px); }
+.ia-invita-icono {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--acento); color: var(--white); font-size: 1rem;
+}
+.ia-invita b { display: block; color: var(--t1); font-size: .95rem; margin-bottom: .15rem; }
+.ia-invita small { display: block; color: var(--t2); font-size: .78rem; line-height: 1.45; }
+.ia-invita-flecha { color: var(--acento); font-size: .8rem; flex-shrink: 0; }
+
+/* Separador «o si prefieres ir directo». */
+.ia-o {
+  display: flex; align-items: center; gap: .75rem;
+  margin: 1.1rem 0 .9rem; color: var(--t3); font-size: .76rem;
+}
+.ia-o::before, .ia-o::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+/* El hilo del chat. Altura acotada y scroll propio: sin esto, una conversación
+   de cuatro turnos empuja el campo de escribir fuera de la pantalla en móvil. */
+.modal-ia { max-width: 540px; }
+.ia-hilo {
+  max-height: min(52vh, 420px); overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: .7rem;
+  padding: .3rem .1rem .6rem; margin-bottom: .8rem;
+}
+.ia-msg {
+  max-width: 88%; padding: .7rem .9rem; border-radius: var(--r-md);
+  font-size: .88rem; line-height: 1.55;
+}
+.ia-msg p { margin: 0 0 .45rem; }
+.ia-msg p:last-child { margin-bottom: 0; }
+.ia-bot { align-self: flex-start; background: var(--surface); color: var(--t1); }
+.ia-yo  { align-self: flex-end;   background: var(--acento); color: var(--white); }
+.ia-ejemplo { color: var(--t3); font-size: .8rem; font-style: italic; }
+.ia-fallo { border: 1px solid var(--border); }
+.ia-fallo .btn { margin: .5rem .4rem 0 0; }
+
+/* Los tres puntos de «está pensando». Es la ÚNICA animación en bucle del
+   sitio junto al pulso de urgencia (decisiones §16), y se gana su sitio:
+   sin ella, dos segundos de espera parecen que se rompió algo. */
+.ia-pensando { display: flex; gap: .3rem; padding: .85rem .9rem; }
+.ia-pensando span {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--t3);
+  animation: ia-latido 1.3s ease-in-out infinite;
+}
+.ia-pensando span:nth-child(2) { animation-delay: .18s; }
+.ia-pensando span:nth-child(3) { animation-delay: .36s; }
+@keyframes ia-latido {
+  0%, 60%, 100% { opacity: .28; transform: translateY(0); }
+  30%           { opacity: 1;   transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ia-pensando span { animation: none; opacity: .5; }
+  .ia-invita:hover  { transform: none; }
+}
+
+.ia-entrada { display: flex; gap: .5rem; }
+.ia-entrada .form-input { flex: 1; }
+.ia-entrada .btn { flex-shrink: 0; padding-inline: 1rem; }
+
+.ia-legal {
+  margin: .8rem 0 0; font-size: .74rem; line-height: 1.5; color: var(--t3);
+}
+.ia-legal i { color: var(--blue); margin-right: .25rem; }
+
+/* Cierre: ramos detectados y el código postal. */
+.ia-cierre { border-top: 1px solid var(--border); padding-top: .9rem; margin-top: .2rem; }
+.ia-ramos { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .8rem; }
+.ia-cp-fila { display: flex; gap: .5rem; margin-bottom: .5rem; }
+.ia-cp-fila .form-input { flex: 1; }
+.ia-cp-fila .btn { flex-shrink: 0; }
+.ia-nota { margin: 0; font-size: .75rem; color: var(--t3); }
+
+/* Los tres candidatos. */
+.ia-candidatos { border-top: 1px solid var(--border); padding-top: .9rem; }
+.ia-candidatos-titulo { margin: 0 0 .7rem; font-size: .86rem; color: var(--t2); }
+.ia-cand {
+  display: flex; align-items: center; gap: .75rem; width: 100%;
+  padding: .6rem; margin-bottom: .5rem; text-align: left;
+  background: none; border: 1px solid var(--border); border-radius: var(--r-md);
+  cursor: pointer; font: inherit;
+  transition: border-color .2s ease, background .2s ease;
+}
+.ia-cand:hover { border-color: var(--acento); background: var(--acento-suave); }
+.ia-cand img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.ia-cand-info { flex: 1; min-width: 0; }
+.ia-cand-info b    { display: block; font-size: .9rem; color: var(--t1); }
+.ia-cand-info em   { display: block; font-size: .76rem; color: var(--t2); font-style: normal; }
+.ia-cand-info small{ display: block; font-size: .72rem; color: var(--t3); margin-top: .15rem; }
+.ia-cand > .fa-chevron-right { color: var(--t3); font-size: .75rem; flex-shrink: 0; }
+
+/* El contexto del asistente, en el panel del agente. */
+.cita-contexto {
+  background: var(--azul-suave); border-left: 3px solid var(--vaxti-azul);
+  border-radius: var(--r-sm); padding: .6rem .8rem; margin: .5rem 0;
+  font-size: .82rem; line-height: 1.55; color: var(--t1);
+}
+.cita-contexto b { display: block; font-size: .72rem; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--vaxti-azul); margin-bottom: .2rem; }
+
+@media (max-width: 480px) {
+  .ia-hilo { max-height: 46vh; }
+  .ia-msg  { max-width: 94%; }
+}
+
 /* Aviso de «no hay agente en tu ciudad» del directorio. Informativo, no de
    error: el visitante no hizo nada mal y sí hay una salida para él. */
 .dir-aviso-fuera {

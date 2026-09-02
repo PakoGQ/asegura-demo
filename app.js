@@ -2151,6 +2151,18 @@ async function enviarCita(ev) {
     origen: 'web',
   };
 
+  /* Si el visitante llegó por el asistente, su caso viaja con la cita para que
+     el agente no le haga contar todo otra vez —que es justo la molestia que el
+     asistente venía a quitar—. Se manda el RESUMEN, nunca la conversación.
+     Ver `db/13_asistente_ia.sql`. */
+  const ctx = contextoIAGuardado(PERFIL.slug);
+  if (ctx) {
+    cita.contexto_ia = ctx.contexto || null;
+    cita.ramos_ia    = (ctx.ramos && ctx.ramos.length) ? ctx.ramos : null;
+    cita.urgencia_ia = ctx.urgencia || null;
+    cita.turnos_ia   = ctx.turnos || null;
+  }
+
   const restaurar = () => {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-paper-plane"></i> Solicitar cita';
@@ -2169,6 +2181,9 @@ async function enviarCita(ev) {
   try {
     const { error } = await sbClient.from('citas').insert(cita);
     if (error) throw error;
+    // Ya cumplió su función: dejarlo vivo pegaría el mismo caso a la siguiente
+    // cita que agendara esta persona, aunque fuera de otra cosa.
+    limpiarContextoIA();
     closeModal('citaModal');
     showToast(`Listo. ${PERFIL.nombre.split(' ')[0]} te confirma por WhatsApp.`);
   } catch (e) {
@@ -2342,7 +2357,7 @@ async function cargarDatosDirector(sesion) {
   try {
     const [citas, resenas, postulaciones] = await Promise.all([
       sbClient.from('citas')
-        .select('id, agente_id, cliente_nombre, cliente_whatsapp, modalidad, ramo_interes, fecha, hora, estado, mensaje')
+        .select('id, agente_id, cliente_nombre, cliente_whatsapp, modalidad, ramo_interes, fecha, hora, estado, mensaje, contexto_ia, urgencia_ia')
         .order('fecha', { ascending: false }),
       // Todas las reseñas de un jalón y se separan en memoria: son pocas y así
       // la pestaña de publicadas también sale de la base en vez de un arreglo.
@@ -2364,6 +2379,8 @@ async function cargarDatosDirector(sesion) {
       wa: c.cliente_whatsapp,
       modalidad: c.modalidad,
       ramo: c.ramo_interes,
+      contexto: c.contexto_ia || '',
+      urgencia: c.urgencia_ia || '',
       fecha: String(c.fecha).slice(0, 10),
       hora: String(c.hora || '').slice(0, 5),
       estado: c.estado,
@@ -3357,6 +3374,11 @@ function filaCita(c) {
           ${c.ag && c.ag.nombre ? ' · ' + esc(c.ag.nombre) : ''}
         </span>
         ${c.mensaje ? `<span class="cita-msg">“${esc(c.mensaje)}”</span>` : ''}
+        ${c.contexto ? `<div class="cita-contexto">
+          <b><i class="fas fa-comments"></i> Lo que contó antes de agendar${
+            c.urgencia === 'pronto' ? ' · corre prisa' : ''}</b>
+          ${esc(c.contexto)}
+        </div>` : ''}
       </div>
       <div class="cita-lado">
         <span class="pill ${e.clase}">${esc(e.txt)}</span>
@@ -3939,6 +3961,11 @@ function filaCitaAgente(c) {
           <i class="fas ${m.icono}"></i> ${esc(m.label)} · ${esc((RAMOS[c.ramo] || {}).label || c.ramo)}
         </span>
         ${c.mensaje ? `<span class="cita-msg">“${esc(c.mensaje)}”</span>` : ''}
+        ${c.contexto ? `<div class="cita-contexto">
+          <b><i class="fas fa-comments"></i> Lo que contó antes de agendar${
+            c.urgencia === 'pronto' ? ' · corre prisa' : ''}</b>
+          ${esc(c.contexto)}
+        </div>` : ''}
         <div class="acciones" style="margin-top:.5rem">
           ${c.estado === 'pendiente' ? `
             <button class="btn btn-acento btn-sm" data-cita-id="${esc(c.id)}" data-cita-estado="confirmada">
@@ -6113,7 +6140,7 @@ async function cargarDatosAgente(sesion) {
   try {
     const [citas, disp, resenas] = await Promise.all([
       sbClient.from('citas')
-        .select('id, cliente_nombre, cliente_whatsapp, modalidad, lugar, ramo_interes, fecha, hora, estado, mensaje')
+        .select('id, cliente_nombre, cliente_whatsapp, modalidad, lugar, ramo_interes, fecha, hora, estado, mensaje, contexto_ia, urgencia_ia')
         .order('fecha', { ascending: false }),
       sbClient.from('disponibilidad')
         .select('id, fecha, hora_ini, disponible')
@@ -6133,6 +6160,7 @@ async function cargarDatosAgente(sesion) {
       modalidad: c.modalidad, lugar: c.lugar, ramo: c.ramo_interes,
       fecha: String(c.fecha).slice(0, 10), hora: String(c.hora || '').slice(0, 5),
       estado: c.estado, mensaje: c.mensaje || '',
+      contexto: c.contexto_ia || '', urgencia: c.urgencia_ia || '',
       agente: YO_AGENTE.slug,
     }));
     MI_AGENDA = disp.data || [];
@@ -7793,6 +7821,21 @@ function pedirCPParaAsignar(ramo) {
           <h3 class="modal-title">Te buscamos agente</h3>
           <button class="modal-close" onclick="closeModal('modalAsignar')"><i class="fas fa-times"></i></button>
         </div>
+        <!-- Dos caminos, y el orden importa: primero el que entiende el caso,
+             después el atajo. Quien ya sabe lo que quiere baja tres centímetros
+             y escribe su CP; quien no lo sabe encuentra la puerta arriba. -->
+        <button type="button" class="ia-invita" onclick="closeModal('modalAsignar');abrirAsistente()">
+          <span class="ia-invita-icono"><i class="fas fa-comments"></i></span>
+          <span>
+            <b>Cuéntanos tu caso</b>
+            <small>«Tengo un Sentra 2022 sin seguro y quiero gastos médicos».
+                   Te hacemos un par de preguntas y te pasamos con quien sabe.</small>
+          </span>
+          <i class="fas fa-chevron-right ia-invita-flecha"></i>
+        </button>
+
+        <div class="ia-o"><span>o si prefieres ir directo</span></div>
+
         <p class="modal-sub">Con tu código postal basta. No pedimos tu nombre
           ni tu teléfono: eso lo decides tú si agendas.</p>
         <div class="form-group">
@@ -7888,4 +7931,319 @@ function pintarAsignado(ramo, ubicacion, lugar) {
   // insistir da otro nombre en vez de repetir el mismo eternamente.
   const otro = $('#asigOtro');
   if (otro) otro.addEventListener('click', () => pintarAsignado(ramo, ubicacion, lugar));
+}
+
+/* ===========================================================================
+   35. El asistente
+
+   Qué resuelve: el visitante que no sabe lo que necesita. El directorio le
+   pide que elija ramo y zona; el buscador, que sepa un nombre. Alguien que
+   solo puede decir «tengo un Sentra 2022 sin seguro y quiero gastos médicos»
+   no encaja en ninguna de las dos puertas. El asistente traduce eso.
+
+   DÓNDE ESTÁ LA INTELIGENCIA: en `supabase/functions/asistente`, no aquí. La
+   API key de Anthropic daría acceso de pago a la cuenta del Director y en el
+   navegador sería pública. Este archivo solo conversa con esa función.
+
+   LÍMITE CNSF (CLAUDE.md §15): el asistente NO asesora ni cotiza —eso exige
+   cédula A1/A2—. Entiende el caso, pregunta lo justo y prepara la cita. La
+   frontera está en el prompt del servidor Y escrita en esta pantalla, porque
+   el visitante tiene derecho a saber con qué está hablando.
+
+   PRIVACIDAD: la conversación vive en memoria y se pierde al cerrar. Lo único
+   que se guarda es el RESUMEN, y solo si el visitante agenda: viaja con la
+   cita, para el agente que él eligió. Ver `db/13_asistente_ia.sql`.
+   =========================================================================== */
+
+const IA = {
+  mensajes: [],      // [{role, content}] — lo que va y viene con el servidor
+  resumen: null,     // lo que devolvió `preparar_resumen`
+  turnos: 0,
+  ocupado: false,
+};
+
+function urlAsistente() {
+  if (!window.CONFIG || !CONFIG.SUPABASE_URL) return null;
+  return `${CONFIG.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/asistente`;
+}
+
+/* Arranque limpio: sin esto, el segundo visitante de la misma pestaña heredaba
+   la conversación del primero. */
+function reiniciarIA() {
+  IA.mensajes = []; IA.resumen = null; IA.turnos = 0; IA.ocupado = false;
+}
+
+function abrirAsistente() {
+  reiniciarIA();
+  const viejo = $('#modalIA');
+  if (viejo) viejo.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="modalIA">
+      <div class="modal modal-ia">
+        <div class="modal-header">
+          <h3 class="modal-title">Cuéntanos tu caso</h3>
+          <button class="modal-close" onclick="closeModal('modalIA')"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div class="ia-hilo" id="iaHilo">
+          <div class="ia-msg ia-bot">
+            <p>Hola. Dime qué necesitas con tus palabras —lo que tienes, lo que
+               te preocupa— y te consigo al asesor indicado.</p>
+            <p class="ia-ejemplo">Por ejemplo: «tengo un Nissan Sentra 2022 sin
+               seguro y quiero gastos médicos para mi familia».</p>
+          </div>
+        </div>
+
+        <form class="ia-entrada" id="iaForm" autocomplete="off">
+          <input class="form-input" id="iaTexto" type="text"
+                 placeholder="Escribe tu caso…" maxlength="600" />
+          <button class="btn btn-acento" id="iaEnviar" type="submit" aria-label="Enviar">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </form>
+
+        <p class="ia-legal">
+          <i class="fas fa-circle-info"></i>
+          Esto es orientación, no asesoría: no damos precios ni recomendamos
+          productos. Eso lo hace un asesor con cédula vigente, que es a quien te
+          vamos a pasar. No escribas datos de tarjetas ni contraseñas.
+        </p>
+      </div>
+    </div>`);
+  openModal('modalIA');
+
+  $('#iaForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = $('#iaTexto').value.trim();
+    if (v) enviarAlAsistente(v);
+  });
+  setTimeout(() => { const c = $('#iaTexto'); if (c) c.focus(); }, 120);
+}
+
+function pintarMensajeIA(quien, texto) {
+  const hilo = $('#iaHilo');
+  if (!hilo) return;
+  hilo.insertAdjacentHTML('beforeend', `
+    <div class="ia-msg ia-${quien}">${
+      // El texto del asistente se escapa igual que el del visitante: viene de
+      // un modelo que a su vez leyó texto del visitante, así que no es HTML de
+      // confianza. Solo se respetan los saltos de línea.
+      esc(texto).replace(/\n+/g, '</p><p>').replace(/^/, '<p>') + '</p>'
+    }</div>`);
+  hilo.scrollTop = hilo.scrollHeight;
+}
+
+function pensandoIA(si) {
+  const hilo = $('#iaHilo');
+  const previo = $('#iaPensando');
+  if (previo) previo.remove();
+  if (!si || !hilo) return;
+  hilo.insertAdjacentHTML('beforeend',
+    `<div class="ia-msg ia-bot ia-pensando" id="iaPensando">
+       <span></span><span></span><span></span>
+     </div>`);
+  hilo.scrollTop = hilo.scrollHeight;
+}
+
+async function enviarAlAsistente(texto) {
+  if (IA.ocupado) return;
+  const url = urlAsistente();
+  if (!url) { falloIA('El asistente no está conectado todavía.'); return; }
+
+  IA.ocupado = true;
+  IA.turnos += 1;
+  $('#iaTexto').value = '';
+  $('#iaTexto').disabled = true;
+  $('#iaEnviar').disabled = true;
+  pintarMensajeIA('yo', texto);
+  IA.mensajes.push({ role: 'user', content: texto });
+  pensandoIA(true);
+
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // La anon key es pública por diseño; la Edge Function la pide igual
+        // que el resto de la API de Supabase.
+        apikey: CONFIG.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ mensajes: IA.mensajes }),
+    });
+    const data = await r.json().catch(() => ({}));
+    pensandoIA(false);
+
+    if (!r.ok) { falloIA(data.error || 'No pudimos con eso.'); return; }
+
+    if (data.texto) {
+      pintarMensajeIA('bot', data.texto);
+      IA.mensajes.push({ role: 'assistant', content: data.texto });
+    }
+
+    if (data.resumen) {
+      IA.resumen = data.resumen;
+      cerrarConResumen();
+      return;
+    }
+
+    $('#iaTexto').disabled = false;
+    $('#iaEnviar').disabled = false;
+    $('#iaTexto').focus();
+  } catch (e) {
+    console.error('asistente:', e);
+    pensandoIA(false);
+    falloIA('Se cortó la conexión. Puedes elegir agente tú mismo.');
+  } finally {
+    IA.ocupado = false;
+  }
+}
+
+/* Cuando el asistente falla, el visitante NO se queda encerrado: se le ofrece
+   la puerta de siempre. Una función nueva que rompe el camino que ya existía
+   es peor que no tener la función. */
+function falloIA(msg) {
+  const hilo = $('#iaHilo');
+  if (!hilo) return;
+  pensandoIA(false);
+  hilo.insertAdjacentHTML('beforeend', `
+    <div class="ia-msg ia-bot ia-fallo">
+      <p>${esc(msg)}</p>
+      <button type="button" class="btn btn-outline btn-sm"
+              onclick="closeModal('modalIA'); asignarAgente('')">
+        <i class="fas fa-wand-magic-sparkles"></i> Asígnenme uno por zona
+      </button>
+      <a class="btn btn-ghost btn-sm" href="agentes.html">Ver todos</a>
+    </div>`);
+  const t = $('#iaTexto'); const b = $('#iaEnviar');
+  if (t) { t.disabled = false; }
+  if (b) { b.disabled = false; }
+  hilo.scrollTop = hilo.scrollHeight;
+}
+
+/* El asistente ya entendió el caso. Falta lo único que él no puede deducir:
+   dónde está el visitante. Se pide el CP y con eso ya se puede elegir. */
+function cerrarConResumen() {
+  const r = IA.resumen || {};
+  const hilo = $('#iaHilo');
+  const form = $('#iaForm');
+  if (form) form.remove();
+
+  if (r.para_el_cliente) pintarMensajeIA('bot', r.para_el_cliente);
+
+  const etiquetas = (r.ramos || [])
+    .map((k) => (RAMOS[k] || {}).label || k)
+    .map((l) => `<span class="pill pill-sm">${esc(l)}</span>`).join('');
+
+  hilo.insertAdjacentHTML('beforeend', `
+    <div class="ia-cierre" id="iaCierre">
+      ${etiquetas ? `<div class="ia-ramos">${etiquetas}</div>` : ''}
+      <label class="form-label" for="iaCP">¿Cuál es tu código postal?</label>
+      <div class="ia-cp-fila">
+        <input class="form-input" id="iaCP" type="text" inputmode="numeric"
+               maxlength="5" placeholder="44630" autocomplete="postal-code" />
+        <button type="button" class="btn btn-acento" id="iaCPok">Buscar asesor</button>
+      </div>
+      <p class="ia-nota">Solo para encontrarte a alguien cerca. No pedimos tu
+         nombre ni tu teléfono.</p>
+      <div id="iaCPaviso"></div>
+    </div>`);
+  hilo.scrollTop = hilo.scrollHeight;
+
+  const buscar = () => {
+    const cp = $('#iaCP').value.trim();
+    const aviso = $('#iaCPaviso');
+    if (!esCP(cp)) { aviso.innerHTML = '<p class="imp-error">Son cinco dígitos, como 44630.</p>'; return; }
+    const u = ubicarPorCP(cp);
+    if (!u || !u.centro) {
+      aviso.innerHTML = '<p class="imp-error">Ese código postal no es de Jalisco. Escríbenos por WhatsApp y lo vemos.</p>';
+      return;
+    }
+    CP_BUSCADO = cp;
+    UBICACION_CLIENTE = u.centro;
+    mostrarCandidatosIA(u);
+  };
+  $('#iaCPok').addEventListener('click', buscar);
+  $('#iaCP').addEventListener('keydown', (e) => { if (e.key === 'Enter') buscar(); });
+  $('#iaCP').focus();
+}
+
+/* Tres opciones, no una. La landing del externo asigna a ciegas y el cliente
+   no sabe ni a quién; aquí ve tres, con el porqué de cada uno, y elige. Que
+   elija él es la diferencia entre un lead y un cliente que llega convencido. */
+function mostrarCandidatosIA(lugar) {
+  const ramo = (IA.resumen.ramos || [])[0] || '';
+  const fuera = Boolean(lugar && !lugar.propia);
+  const vistos = new Set();
+  const tres = [];
+  for (let i = 0; i < 12 && tres.length < 3; i++) {
+    const e = elegirAgente({ ramo, ubicacion: UBICACION_CLIENTE, soloVideo: fuera });
+    if (e && !vistos.has(e.agente.slug)) { vistos.add(e.agente.slug); tres.push(e); }
+  }
+  if (!tres.length) { falloIA('No encontramos a nadie con ese perfil.'); return; }
+
+  const hilo = $('#iaHilo');
+  $('#iaCierre').remove();
+  hilo.insertAdjacentHTML('beforeend', `
+    <div class="ia-candidatos">
+      <p class="ia-candidatos-titulo">
+        ${fuera
+          ? `No hay asesor en ${esc(lugar.nombre)}, así que estos te atienden en línea:`
+          : 'Estos tres te quedan bien. Elige con quién:'}
+      </p>
+      ${tres.map((c) => `
+        <button type="button" class="ia-cand" data-slug="${esc(c.agente.slug)}">
+          <img src="${esc(c.agente.foto)}" alt="${esc(c.agente.nombre)}" />
+          <span class="ia-cand-info">
+            <b>${esc(c.agente.nombre)}</b>
+            <em>${esc(c.agente.titulo || '')}</em>
+            <small>${esc(c.motivos.slice(0, 2).join(' · '))}</small>
+          </span>
+          <i class="fas fa-chevron-right"></i>
+        </button>`).join('')}
+    </div>`);
+  hilo.scrollTop = hilo.scrollHeight;
+
+  hilo.querySelectorAll('.ia-cand').forEach((b) => {
+    b.addEventListener('click', () => elegirDesdeIA(b.dataset.slug));
+  });
+}
+
+/* El puente entre el chat y la cita.
+
+   El resumen viaja en sessionStorage y NO en la URL: en la URL quedaría en el
+   historial del navegador, en los `Referer` que se mandan a terceros y en
+   cualquier captura de pantalla. sessionStorage muere al cerrar la pestaña,
+   que es exactamente la vida que debe tener. */
+function elegirDesdeIA(slug) {
+  try {
+    sessionStorage.setItem('vaxti_ia', JSON.stringify({
+      contexto: IA.resumen.resumen || '',
+      ramos: IA.resumen.ramos || [],
+      urgencia: IA.resumen.urgencia || 'normal',
+      turnos: IA.turnos,
+      slug,
+    }));
+  } catch (e) {
+    // Modo privado o almacenamiento lleno: se sigue igual, el cliente tendrá
+    // que contarlo otra vez. Peor sería no dejarlo agendar.
+    console.warn('No se pudo guardar el contexto del asistente:', e.message);
+  }
+  location.href = `perfil.html?a=${encodeURIComponent(slug)}&ia=1`;
+}
+
+/* Lo recoge perfil.html. Devuelve null si no es para este agente: sin esa
+   comprobación, el contexto de una consulta de autos se pegaría a la cita del
+   siguiente agente que el visitante mirara. */
+function contextoIAGuardado(slug) {
+  try {
+    const raw = sessionStorage.getItem('vaxti_ia');
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return d && d.slug === slug ? d : null;
+  } catch { return null; }
+}
+
+function limpiarContextoIA() {
+  try { sessionStorage.removeItem('vaxti_ia'); } catch { /* nada que borrar */ }
 }
