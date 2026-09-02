@@ -114,7 +114,7 @@ create table if not exists public.ramos_agente (
   ramo            text not null check (ramo in (
                     'auto', 'vida', 'gastos_medicos', 'hogar',
                     'empresarial', 'educativo', 'fianzas',
-                    'ahorro', 'retiro')),
+                    'ahorro', 'retiro', 'mascotas')),
   es_especialidad boolean not null default false,       -- lo que más vende
   certificado     boolean not null default false,       -- acreditación del ramo
   nota            text,

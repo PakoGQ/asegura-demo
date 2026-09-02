@@ -39,7 +39,7 @@ create table if not exists public.polizas (
   ramo               text not null check (ramo in (
                        'auto', 'vida', 'gastos_medicos', 'hogar',
                        'empresarial', 'educativo', 'fianzas',
-                       'ahorro', 'retiro')),
+                       'ahorro', 'retiro', 'mascotas')),
   numero_poliza      text not null,
   prima_anual        numeric(12,2) not null check (prima_anual >= 0),
   comision_pct       numeric(5,2) check (comision_pct between 0 and 100),
@@ -93,7 +93,7 @@ create table if not exists public.oportunidades (
   ramo_sugerido   text check (ramo_sugerido in (
                     'auto', 'vida', 'gastos_medicos', 'hogar',
                     'empresarial', 'educativo', 'fianzas',
-                    'ahorro', 'retiro')),
+                    'ahorro', 'retiro', 'mascotas')),
   motivo          text not null,
   valor_estimado  numeric(12,2),
   estatus         text not null default 'nueva' check (estatus in (

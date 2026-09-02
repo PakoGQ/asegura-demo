@@ -41,7 +41,7 @@ const MAX_TURNOS = 12;
    lo propondrá; si se escribe uno que la base no acepta, la cita se rechaza. */
 const RAMOS = [
   'auto', 'vida', 'gastos_medicos', 'hogar',
-  'empresarial', 'educativo', 'fianzas', 'ahorro', 'retiro',
+  'empresarial', 'educativo', 'fianzas', 'ahorro', 'retiro', 'mascotas',
 ] as const;
 
 const SISTEMA = `Eres el asistente de Vaxti Asesores Financieros, una agencia de
@@ -96,6 +96,7 @@ QUÉ NECESITAS AVERIGUAR, según el caso — dos cosas de cada uno
 - Ahorro: en cuántos años piensa usarlo · si es para una meta concreta.
 - Retiro: qué edad tiene hoy · a qué edad quiere dejar de trabajar.
 - Fianzas: qué tipo (cumplimiento, anticipo, vicios ocultos) · para qué contrato.
+- Mascotas: si es perro o gato y su edad · si ha tenido algo serio de salud.
 
 Si menciona DOS ramos, pregunta también por el segundo antes de cerrar. Quien
 llega diciendo dos cosas espera que le pregunten por las dos.

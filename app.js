@@ -26,6 +26,11 @@ const RAMOS = {
      §18 de CLAUDE.md, que llevaba abierta desde el 28-jul-2026. */
   ahorro:         { label: 'Ahorro e inversión', icono: 'fa-piggy-bank',   color: '#7a9e1f' },
   retiro:         { label: 'Retiro (PPR)',     icono: 'fa-umbrella-beach', color: '#a34a86' },
+  /* [VAXTI] Mascotas entra el 2-sep-2026: el sitio propio del Director,
+     asesoresvaxti.com, ya lo anuncia («protección integral para autos y
+     mascotas») y nuestro catálogo no lo tenía. Mismo caso que ahorro y retiro:
+     el sitio iba por detrás de lo que el equipo ya vende. */
+  mascotas:       { label: 'Mascotas',         icono: 'fa-paw',            color: '#00a3c4' },
 };
 
 const MODALIDADES = {
@@ -4142,6 +4147,7 @@ const RAMOS_DESC = {
   fianzas:        'Garantiza ante un tercero que vas a cumplir un contrato. Obligatorio en obra pública.',
   ahorro:         'Guardas una cantidad cada mes y crece con los años, con la aseguradora respondiendo por el capital.',
   retiro:         'Para cuando dejes de trabajar. Tiene ventajas fiscales que una cuenta de ahorro normal no da.',
+  mascotas:       'Veterinario, cirugías y accidentes de tu perro o gato. Lo que una urgencia te sacaría del bolsillo de golpe.',
 };
 
 function initRamos() {
@@ -4194,6 +4200,7 @@ function initRamos() {
     { txt: 'Casa contra sismo',            ramo: 'hogar' },
     { txt: 'Plan personal de retiro',      ramo: 'retiro' },
     { txt: 'Ahorro que dé rendimiento',    ramo: 'ahorro' },
+    { txt: 'Seguro para mi perro',         ramo: 'mascotas' },
     { txt: 'Cambiar de aseguradora',       ramo: '' },
     { txt: 'Revisar mi póliza actual',     ramo: '' },
   ];
@@ -4567,6 +4574,7 @@ const RAMO_SINONIMOS = {
      educativo, no aquí. 'dotal' se queda en vida, que es donde pertenece. */
   ahorro: ['ahorro', 'ahorro protegido', 'inversion', 'inversión', 'trasciende', 'consolida'],
   retiro: ['retiro', 'ppr', 'plan personal de retiro', 'pension', 'pensión', 'jubilacion', 'jubilación'],
+  mascotas: ['mascota', 'mascotas', 'veterinario', 'veterinaria'],
 };
 
 function aRamo(v) {
@@ -8031,6 +8039,11 @@ function abrirAsistente() {
           Esto es orientación, no asesoría: no damos precios ni recomendamos
           productos. Eso lo hace un asesor con cédula vigente, que es a quien te
           vamos a pasar. No escribas datos de tarjetas ni contraseñas.
+          <!-- El enlace va aquí y no solo en el pie: este es el sitio donde la
+               gente cuenta cosas de su salud y su dinero, y es donde tiene
+               sentido poder comprobar qué se hace con ellas. -->
+          <a href="privacidad.html" target="_blank" rel="noopener">Cómo tratamos
+          lo que escribes</a>.
         </p>
       </div>
     </div>`);
@@ -8377,6 +8390,8 @@ const IA_PISTAS = {
   retiro: ['jubilar', 'jubilarme', 'pensionarme', 'vejez'],
   ahorro: ['guardar dinero', 'invertir', 'rendimiento'],
   vida: ['fallezca', 'me pase algo', 'mi familia quede', 'herencia'],
+  mascotas: ['perro', 'perrito', 'gato', 'gatito', 'cachorro', 'michi', 'lomito',
+             'canino', 'felino', 'veterinar'],
 };
 
 /* Todos los ramos que menciona un texto, no solo el primero. `aRamo()` para en
@@ -8452,6 +8467,10 @@ const IA_PREGUNTA = {
     '¿Qué edad tienes hoy?',
     '¿A qué edad te gustaría dejar de trabajar?',
   ],
+  mascotas: [
+    '¿Es perro o gato, y qué edad tiene?',
+    '¿Has tenido que llevarlo al veterinario por algo serio?',
+  ],
 };
 
 /* Dos redacciones del mismo ramo, y hacen falta las dos: el mensaje de cierre
@@ -8468,6 +8487,7 @@ const IA_CIERRE = {
   fianzas:        { tu: 'una fianza',                  su: 'una fianza' },
   ahorro:         { tu: 'un plan de ahorro',           su: 'un plan de ahorro' },
   retiro:         { tu: 'un plan de retiro',           su: 'un plan de retiro' },
+  mascotas:       { tu: 'un seguro para tu mascota',  su: 'un seguro de mascota' },
 };
 
 /* Responde como lo haría el servidor: mismo contrato (`texto` o `resumen`),
@@ -8580,6 +8600,7 @@ function etiquetaPregunta(p) {
     ['tipo de fianza', 'Tipo de fianza'], ['qué contrato', 'Contrato'],
     ['cuántos años pensarías', 'Plazo'], ['meta concreta', 'Destino'],
     ['dejar de trabajar', 'Edad de retiro'],
+    ['perro o gato', 'Mascota'], ['al veterinario', 'Historial veterinario'],
   ];
   const hit = mapa.find(([clave]) => p.includes(clave));
   return hit ? hit[1] : 'Dato';
