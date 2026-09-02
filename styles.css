@@ -7745,6 +7745,17 @@ details.faq-item[open] .faq-a {
 }
 .ia-legal i { color: var(--blue); margin-right: .25rem; }
 
+/* La franja de demostración. Informativa, no alarmante: el recorrido que el
+   visitante está viendo SÍ es el real, lo simulado son las respuestas. */
+.ia-demo-franja {
+  display: flex; gap: .5rem; align-items: flex-start;
+  background: rgba(217,165,32,.12); border: 1px solid rgba(217,165,32,.35);
+  border-radius: var(--r-sm); padding: .55rem .7rem; margin: .8rem 0 0;
+  font-size: .76rem; line-height: 1.5; color: var(--t2);
+}
+.ia-demo-franja i { color: #a67c0c; margin-top: .15rem; flex-shrink: 0; }
+.ia-demo-franja b { color: var(--t1); }
+
 /* Cierre: ramos detectados y el código postal. */
 .ia-cierre { border-top: 1px solid var(--border); padding-top: .9rem; margin-top: .2rem; }
 .ia-ramos { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .8rem; }

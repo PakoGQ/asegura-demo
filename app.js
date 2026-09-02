@@ -7960,6 +7960,9 @@ const IA = {
   resumen: null,     // lo que devolvió `preparar_resumen`
   turnos: 0,
   ocupado: false,
+  // ¿El servidor real llegó a contestar alguna vez en esta sesión? Es lo que
+  // distingue «no está desplegado» de «se cayó a mitad de la conversación».
+  huboServidor: false,
 };
 
 function urlAsistente() {
@@ -7971,6 +7974,7 @@ function urlAsistente() {
    la conversación del primero. */
 function reiniciarIA() {
   IA.mensajes = []; IA.resumen = null; IA.turnos = 0; IA.ocupado = false;
+  IA.huboServidor = false;
 }
 
 function abrirAsistente() {
@@ -8048,7 +8052,6 @@ function pensandoIA(si) {
 async function enviarAlAsistente(texto) {
   if (IA.ocupado) return;
   const url = urlAsistente();
-  if (!url) { falloIA('El asistente no está conectado todavía.'); return; }
 
   IA.ocupado = true;
   IA.turnos += 1;
@@ -8060,21 +8063,48 @@ async function enviarAlAsistente(texto) {
   pensandoIA(true);
 
   try {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // La anon key es pública por diseño; la Edge Function la pide igual
-        // que el resto de la API de Supabase.
-        apikey: CONFIG.SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ mensajes: IA.mensajes }),
-    });
-    const data = await r.json().catch(() => ({}));
-    pensandoIA(false);
+    let data;
 
-    if (!r.ok) { falloIA(data.error || 'No pudimos con eso.'); return; }
+    if (IA_DEMO || !url) {
+      /* Ya se sabe que no hay servidor: se responde con el guion. La espera
+         corta no es decorativa —sin ella el guion contesta antes de que el
+         visitante termine de leer su propio mensaje, y se nota falso—. */
+      IA_DEMO = true;
+      marcarAsistenteDemo();
+      await new Promise((r) => setTimeout(r, 700));
+      data = respuestaDemoIA(IA.mensajes);
+    } else {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // La anon key es pública por diseño; la Edge Function la pide igual
+          // que el resto de la API de Supabase.
+          apikey: CONFIG.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ mensajes: IA.mensajes }),
+      });
+      data = await r.json().catch(() => ({}));
+      if (r.ok) IA.huboServidor = true;
+
+      /* 404 = la función no está desplegada. 503 = está, pero sin API key.
+         Las dos significan «todavía no lo han encendido», y ahí el guion es
+         mejor que un error. Cualquier otro fallo —429, 500, red— es un
+         problema temporal del asistente REAL y se dice, no se tapa con
+         respuestas de mentira que el visitante creería ciertas. */
+      if (r.status === 404 || r.status === 503) {
+        IA_DEMO = true;
+        marcarAsistenteDemo();
+        data = respuestaDemoIA(IA.mensajes);
+      } else if (!r.ok) {
+        pensandoIA(false);
+        falloIA(data.error || 'No pudimos con eso.');
+        return;
+      }
+    }
+
+    pensandoIA(false);
 
     if (data.texto) {
       pintarMensajeIA('bot', data.texto);
@@ -8091,6 +8121,31 @@ async function enviarAlAsistente(texto) {
     $('#iaEnviar').disabled = false;
     $('#iaTexto').focus();
   } catch (e) {
+    /* Aquí cae también la función NO DESPLEGADA, y no por el 404: Supabase
+       responde 404 al preflight OPTIONS sin `access-control-allow-methods`,
+       así que el navegador bloquea el POST antes de que nadie pueda leer ese
+       404. Comprobado con curl el 2-sep-2026. Por eso la rama de arriba no
+       basta y hay que decidirlo también desde aquí.
+
+       Si el servidor nunca contestó en esta sesión, se asume que todavía no
+       está encendido y entra el guion —con su franja, que lo dice—. Si ya
+       había contestado antes, esto es una caída de verdad y se avisa: taparla
+       con respuestas de mentira sería lo peor de los dos mundos. */
+    if (!IA.huboServidor) {
+      IA_DEMO = true;
+      marcarAsistenteDemo();
+      pensandoIA(false);
+      const data = respuestaDemoIA(IA.mensajes);
+      if (data.texto) {
+        pintarMensajeIA('bot', data.texto);
+        IA.mensajes.push({ role: 'assistant', content: data.texto });
+      }
+      if (data.resumen) { IA.resumen = data.resumen; cerrarConResumen(); return; }
+      $('#iaTexto').disabled = false;
+      $('#iaEnviar').disabled = false;
+      $('#iaTexto').focus();
+      return;
+    }
     console.error('asistente:', e);
     pensandoIA(false);
     falloIA('Se cortó la conexión. Puedes elegir agente tú mismo.');
@@ -8246,4 +8301,165 @@ function contextoIAGuardado(slug) {
 
 function limpiarContextoIA() {
   try { sessionStorage.removeItem('vaxti_ia'); } catch { /* nada que borrar */ }
+}
+
+/* ===========================================================================
+   36. El asistente en modo demostración
+
+   POR QUÉ EXISTE
+   Decisión de Paco (2-sep-2026): enseñarle el asistente al Director sin pagar
+   la API hasta que él lo apruebe. Razonable — la conversación real cuesta por
+   uso y todavía no hay nadie que la haya aprobado.
+
+   CÓMO SE ENCIENDE Y SE APAGA — no hay interruptor que recordar
+   El asistente intenta SIEMPRE hablar con el servidor de verdad. Solo cuando
+   responde 404 (función no desplegada) o 503 (desplegada pero sin API key) se
+   pasa al guion, y lo recuerda para el resto de la sesión. El día que Paco
+   despliegue la función, el asistente real toma el control solo. Es el mismo
+   patrón que `DEMO` en la sección 3: se apaga en cuanto la pieza real existe.
+
+   Un 429 o un fallo de red NO activan el guion: eso es un problema temporal
+   del asistente real y hay que decirlo, no taparlo con respuestas de mentira.
+
+   ⚠️ SE DICE QUE ES UNA DEMOSTRACIÓN, Y NO ES NEGOCIABLE
+   El proyecto ya decidió que agendar en modo demo AVISA de que no se guardó
+   en vez de fingir (CLAUDE.md §«Qué es demo y qué es real»). Fingir
+   inteligencia sería peor: el Director podría creer que ya hay algo entrenado
+   detrás y tomar decisiones sobre eso. La franja lo dice en la pantalla.
+
+   QUÉ TAN LEJOS LLEGA EL GUION
+   Reconoce los nueve ramos por las mismas palabras que ya usa el importador de
+   cartera (`RAMO_SINONIMOS`), hace UNA pregunta de seguimiento del ramo
+   principal y arma el resumen con lo que el visitante escribió. No entiende
+   matices, no razona: reconoce palabras. Basta para enseñar el recorrido, y
+   por eso no puede quedarse como la versión definitiva.
+   =========================================================================== */
+
+let IA_DEMO = false;   // se enciende sola al ver un 404/503
+
+/* Pistas que solo usa el guion. NO se meten en `RAMO_SINONIMOS` a propósito:
+   esa tabla la usa el importador de cartera para clasificar pólizas reales, y
+   una póliza que diga «Sentra» en cualquier campo no debe convertirse en un
+   ramo por eso. Aquí en cambio hacen falta, porque la gente no escribe «auto»:
+   escribe la marca. Probado con el caso que trajo Paco —«tengo un Nissan
+   Sentra 2022 sin seguro»—, donde la palabra «auto» no aparece por ningún lado. */
+const IA_PISTAS = {
+  auto: ['nissan', 'sentra', 'versa', 'march', 'chevrolet', 'aveo', 'onix',
+         'volkswagen', 'vento', 'jetta', 'toyota', 'corolla', 'hilux', 'honda',
+         'civic', 'mazda', 'kia', 'hyundai', 'ford', 'ranger', 'camioneta',
+         'carro', 'coche', 'moto', 'placas', 'circular'],
+  gastos_medicos: ['hospital', 'cirugia', 'cirugía', 'enferm', 'doctor',
+                   'imss', 'operacion', 'operación', 'consulta'],
+  hogar: ['departamento', 'depa', 'vivienda', 'sismo', 'temblor', 'inundacion'],
+  empresarial: ['empleados', 'nomina', 'nómina', 'taller', 'bodega', 'local',
+                'restaurante', 'obra'],
+  educativo: ['universidad', 'universitario', 'carrera de mi', 'colegiatura'],
+  retiro: ['jubilar', 'jubilarme', 'pensionarme', 'vejez'],
+  ahorro: ['guardar dinero', 'invertir', 'rendimiento'],
+  vida: ['fallezca', 'me pase algo', 'mi familia quede', 'herencia'],
+};
+
+/* Todos los ramos que menciona un texto, no solo el primero. `aRamo()` para en
+   la primera coincidencia, y el caso típico —«un Sentra sin seguro y quiero
+   gastos médicos»— tiene dos. */
+function ramosMencionados(texto) {
+  const n = normaliza(texto);
+  const salida = [];
+  for (const [ramo, ops] of Object.entries(RAMO_SINONIMOS)) {
+    if (ops.some((o) => n.includes(o))) salida.push(ramo);
+  }
+  for (const [ramo, pistas] of Object.entries(IA_PISTAS)) {
+    if (!salida.includes(ramo) && pistas.some((p) => n.includes(p))) salida.push(ramo);
+  }
+  return salida;
+}
+
+/* La pregunta de seguimiento de cada ramo. Son las mismas que el prompt del
+   servidor le pide al modelo, para que la demostración se parezca a lo que va
+   a pasar de verdad y no prometa otra cosa. */
+const IA_PREGUNTA = {
+  auto:           '¿El auto ya trae seguro o se te venció?',
+  gastos_medicos: '¿Sería para ti solo o también para tu familia?',
+  vida:           '¿Quién depende de ti económicamente hoy?',
+  hogar:          '¿La casa es tuya o rentas?',
+  empresarial:    '¿A qué se dedica el negocio y cuántos empleados son?',
+  educativo:      '¿En cuántos años entraría a la universidad?',
+  fianzas:        '¿Qué contrato o trámite te está pidiendo la fianza?',
+  ahorro:         '¿En cuántos años pensarías usar ese dinero?',
+  retiro:         '¿A qué edad te gustaría dejar de trabajar?',
+};
+
+/* Dos redacciones del mismo ramo, y hacen falta las dos: el mensaje de cierre
+   se lo lee el CLIENTE («tu auto») y el resumen lo lee el AGENTE («su auto»).
+   La primera versión reutilizaba una sola lista y salía «El cliente busca un
+   seguro para tu auto», mezclando las dos personas en la misma frase. */
+const IA_CIERRE = {
+  auto:           { tu: 'un seguro para tu auto',      su: 'un seguro de auto' },
+  gastos_medicos: { tu: 'gastos médicos',              su: 'gastos médicos' },
+  vida:           { tu: 'un seguro de vida',           su: 'un seguro de vida' },
+  hogar:          { tu: 'protección para tu casa',     su: 'protección para su casa' },
+  empresarial:    { tu: 'cobertura para tu negocio',   su: 'cobertura para su negocio' },
+  educativo:      { tu: 'un plan educativo',           su: 'un plan educativo' },
+  fianzas:        { tu: 'una fianza',                  su: 'una fianza' },
+  ahorro:         { tu: 'un plan de ahorro',           su: 'un plan de ahorro' },
+  retiro:         { tu: 'un plan de retiro',           su: 'un plan de retiro' },
+};
+
+/* Responde como lo haría el servidor: mismo contrato (`texto` o `resumen`),
+   para que `enviarAlAsistente()` no tenga que saber cuál de los dos le habló. */
+function respuestaDemoIA(mensajes) {
+  const delVisitante = mensajes.filter((m) => m.role === 'user');
+  const todo = delVisitante.map((m) => m.content).join(' ');
+  const ramos = ramosMencionados(todo);
+  const turno = delVisitante.length;
+
+  // Primer mensaje y algo reconocible: una pregunta y a esperar.
+  if (turno === 1 && ramos.length) {
+    const p = IA_PREGUNTA[ramos[0]] || '¿Desde cuándo lo traes pendiente?';
+    // «también te interesa auto» sonaba a máquina. Con la forma larga se lee
+    // como algo que diría una persona.
+    const otros = ramos.length > 1
+      ? ` Y también ${(IA_CIERRE[ramos[1]] || {}).tu || 'lo otro'}.`
+      : '';
+    return { texto: `Entendido.${otros} ${p}` };
+  }
+
+  // Primer mensaje sin nada reconocible: pedirlo con otras palabras.
+  if (turno === 1) {
+    return {
+      texto: 'Cuéntame un poco más: ¿es por un auto, por salud, por tu casa, '
+           + 'por el negocio, o por ahorro y retiro?',
+    };
+  }
+
+  // Segundo mensaje: se cierra. Nadie quiere un cuestionario.
+  const finales = ramos.length ? ramos.slice(0, 2) : ['vida'];
+  const paraTi  = finales.map((r) => (IA_CIERRE[r] || {}).tu || 'asesoría').join(' y ');
+  const paraEl  = finales.map((r) => (IA_CIERRE[r] || {}).su || 'asesoría').join(' y ');
+  const dicho = delVisitante.map((m) => m.content.trim()).join(' ');
+
+  return {
+    resumen: {
+      ramos: finales,
+      resumen: `El cliente busca ${paraEl}. Con sus palabras: «${dicho.slice(0, 240)}».`,
+      para_el_cliente: `Listo: necesitas ${paraTi}. Te busco quién lo maneja cerca de ti.`,
+      urgencia: /venc|urge|ya se me|mañana|esta semana|pasado mañana/i.test(dicho)
+        ? 'pronto' : 'normal',
+    },
+  };
+}
+
+/* La franja. Se pone una sola vez y solo cuando ya se sabe que no hay servidor
+   detrás — antes sería mentir en la otra dirección. */
+function marcarAsistenteDemo() {
+  const modal = $('#modalIA');
+  if (!modal || modal.querySelector('.ia-demo-franja')) return;
+  const legal = modal.querySelector('.ia-legal');
+  if (!legal) return;
+  legal.insertAdjacentHTML('beforebegin', `
+    <p class="ia-demo-franja">
+      <i class="fas fa-flask"></i>
+      <b>Demostración.</b> Estas respuestas son de ejemplo, no hay una IA
+      conectada todavía. El recorrido es el real: así se verá cuando se active.
+    </p>`);
 }
