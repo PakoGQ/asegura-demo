@@ -7836,8 +7836,12 @@ function pedirCPParaAsignar(ramo) {
 
         <div class="ia-o"><span>o si prefieres ir directo</span></div>
 
-        <p class="modal-sub">Con tu código postal basta. No pedimos tu nombre
-          ni tu teléfono: eso lo decides tú si agendas.</p>
+        <p class="modal-sub">Dos datos y listo. No pedimos tu nombre ni tu
+          teléfono: eso lo decides tú si agendas.</p>
+        <div class="form-group">
+          <label class="form-label" for="asigRamo">¿Qué seguro o inversión buscas?</label>
+          <select class="form-input" id="asigRamo"></select>
+        </div>
         <div class="form-group">
           <label class="form-label" for="asigCP">Tu código postal</label>
           <input class="form-input" id="asigCP" type="text" inputmode="numeric"
@@ -7854,7 +7858,21 @@ function pedirCPParaAsignar(ramo) {
     </div>`);
   openModal('modalAsignar');
 
+  /* Las opciones se generan desde `RAMOS`, nunca escritas a mano: así el día
+     que entre un ramo nuevo aparece aquí solo, como ya pasa en el buscador,
+     el directorio y la postulación. «Todavía no lo sé» va primero y es el
+     valor por defecto — quien abre esta ventana muchas veces es justamente
+     quien no lo sabe, y obligarle a elegir sería devolverle el problema. */
+  $('#asigRamo').innerHTML =
+    '<option value="">Todavía no lo sé</option>' +
+    Object.entries(RAMOS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('');
+  // Si venía con un ramo elegido en el buscador o en el directorio, se respeta.
+  if (ramo) $('#asigRamo').value = ramo;
+
   const lanzar = () => {
+    // Manda lo que haya elegido AQUÍ: si cambió de idea en esta ventana, esa
+    // es la respuesta más reciente y la que vale.
+    const elegido = $('#asigRamo').value || ramo;
     const cp = $('#asigCP').value.trim();
     const aviso = $('#asigAviso');
     if (!esCP(cp)) {
@@ -7868,10 +7886,12 @@ function pedirCPParaAsignar(ramo) {
     }
     CP_BUSCADO = cp;
     UBICACION_CLIENTE = u.centro;
-    pintarAsignado(ramo, u.centro, u);
+    pintarAsignado(elegido, u.centro, u);
   };
   $('#asigOk').addEventListener('click', lanzar);
   $('#asigCP').addEventListener('keydown', (e) => { if (e.key === 'Enter') lanzar(); });
+  // El foco va al código postal y no al desplegable: el ramo ya trae un valor
+  // válido por defecto y el CP es el único campo que hay que escribir.
   $('#asigCP').focus();
 }
 
