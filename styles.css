@@ -102,14 +102,26 @@
   body.panel-agente .nav .nav-agente-right { margin-left: auto; }
 }
 
-/* Mobile: same crop applied proportionally (108px image → 70px visible gold area).
-   Scoped to `.nav .nav-logo` so the footer brand logo is NOT affected. */
+/* ── La barra en móvil (revisada el 2-sep-2026) ────────────────────────────
+   Paco pidió el logo más grande y menos espacio vacío. Las dos cosas salían
+   del mismo sitio, y no era el CSS:
+
+   La barra mostraba `logo.png`, el lockup completo, donde «ASESORES
+   FINANCIEROS» ocupa un tercio del alto. De los 52px del logo, la palabra
+   «Vaxti» solo medía 35 — el resto era texto ilegible a ese tamaño. Ahora usa
+   `logo-nav.png`, el wordmark solo, que CLAUDE.md §13 llevaba especificado
+   desde julio y nunca se había generado.
+
+   El `overflow:hidden` a 70px venía del proyecto de referencia, donde recortaba
+   un área dorada de SU logo. Aquí no recortaba nada útil: solo reservaba 70px
+   de alto para una imagen de 52. Se quita, y el contenedor mide lo que mide el
+   logo.
+
+   Resultado: «Vaxti» pasa de 35px a 46px (un 31% más grande) y la barra baja
+   de 100px a 68px. Más logo y menos aire, que era justo lo pedido. */
 @media (max-width: 768px) {
-  :root { --nav-h: 100px; }
-  .nav .nav-logo {
-    overflow: hidden;
-    height: 70px;
-  }
+  :root { --nav-h: 68px; }
+  .nav .nav-logo { height: 46px; display: flex; align-items: center; }
 }
 
 /* ─── Reset ─────────────────────────────────────────────── */
@@ -6889,9 +6901,10 @@ details.faq-item[open] .faq-a {
 @media (max-width: 768px) {
 
   /* ── Nav height ── */
-  :root { --nav-h: 70px; }
+  :root { --nav-h: 68px; }
 
   /* ── Nav: sticky en móvil para que el hero fluya debajo ── */
+
   .nav {
     position:   sticky !important;
     top:        0 !important;
@@ -6924,8 +6937,11 @@ details.faq-item[open] .faq-a {
     gap:            0;
   }
 
-  /* Smaller logo — scoped to .nav so footer logo is unaffected */
-  .nav .nav-logo img { height: 52px !important; }
+  /* 46px que SÍ son 46px de «Vaxti», porque la imagen ya no arrastra el
+     «Asesores Financieros». Conserva el `!important` porque hay otras dos
+     reglas de altura para este mismo elemento más arriba (108px y 78px),
+     heredadas del port: quitarlo devolvería el logo a 78px. */
+  .nav .nav-logo img { height: 46px !important; }
 
   /* ── Centro del nav: columna AGENTES + tagline ── */
   .nav-lema-mobile {
@@ -7874,10 +7890,27 @@ details.faq-item[open] .faq-a {
 /* El tagline grande y la marca centrada del proyecto de referencia no aplican aquí. */
 .nav-title, .nav-tagline, .nav-lema-label, .nav-lema-mobile { display: none !important; }
 
+/* El hueco que le reserva el body a la barra.
+
+   Solo hace falta mientras la barra es `fixed` —se sale del flujo y hay que
+   dejarle sitio—. En móvil la barra pasa a `sticky` (más abajo, en el media
+   query de 768px) y entonces ocupa su propio espacio: el padding se SUMA y
+   empuja la barra `--nav-h` píxeles hacia abajo, dejando una franja blanca
+   ANTES del logo. Eso era el espacio vacío que se veía en el móvil y en la
+   PWA, y no venía del logo sino de aquí. (2-sep-2026) */
 body { padding-top: var(--nav-h); }
 
+@media (max-width: 768px) {
+  body { padding-top: 0; }
+}
+
 @media (max-width: 900px) {
-  :root { --nav-h: 100px; --topbar-h: 94px; }
+  /* 68px, no 100. Esta es la declaración que MANDA en móvil: hay siete
+     `--nav-h` en el archivo y gana la última cuyo media query aplique. Si se
+     cambia el alto de la barra y no se ve el efecto, es que se tocó otra. */
+  /* La barra del panel baja igual que la pública: es sticky, así que su alto
+     sale de aquí y no del contenido. 94 → 62 con un logo de 40. */
+  :root { --nav-h: 68px; --topbar-h: 62px; }
   .nav { padding: 0 1rem; }
   .nav-center { display: none; }
   .nav-brand-title { font-size: 1.05rem; }
@@ -8845,8 +8878,12 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
 .nav-logo:has(.logo-img.sin-logo) ~ .solo-sin-logo { display: block; }
 
 @media (max-width: 900px) {
-  .nav-logo .logo-img, .panel-marca .logo-img { height: 78px; }
-  .footer-brand .logo-img { height: 124px; }
+  /* 78px eran correctos para `logo.png`, donde un tercio del alto era el
+     «Asesores Financieros». Con `logo-nav.png` esos 78px serían 78px de
+     «Vaxti» y el logo se comía la barra del panel. 40 da un wordmark
+     equivalente al de antes y deja respirar. (2-sep-2026) */
+  .nav-logo .logo-img, .panel-marca .logo-img { height: 40px; }
+  .footer-brand .logo-img { height: 124px; }   /* el pie SÍ usa el lockup */
 }
 
 /* El nav del proyecto de referencia apilaba título, lema y enlaces en columna

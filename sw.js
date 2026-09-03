@@ -23,7 +23,7 @@
    cachés viejas y avisa a las pestañas abiertas (banner de actualización).
    ========================================================================== */
 
-const CACHE_NAME = 'vaxti-v2';
+const CACHE_NAME = 'vaxti-v3';
 const OFFLINE_URL = 'offline.html';
 
 /* Estáticos: cache-first. Cambian poco y así la app abre al instante. */
@@ -34,6 +34,9 @@ const ESTATICOS = [
   'manifest.json',
   'offline.html',
   'logo.png',
+  /* El de la barra. Va aquí desde el 2-sep-2026: sin él, en la PWA sin red la
+     cabecera se queda sin logo, que es lo primero que se ve al abrir. */
+  'logo-nav.png',
   'logo-icono.png',
   'icon-192.png',
   'icon-512.png',
