@@ -49,6 +49,11 @@
   --t1:        #00224f;
   --t2:        #5b6672;
   --t3:        #8a94a0;
+  /* Variantes para fondos cálidos claros, donde --t2 y --acento-dk se quedan
+     por debajo de AA. Medido sobre el degradado del hero: --t2 daba 3.95 y
+     --acento-dk 3.18, con 4.5 exigido. Estos dan 5.54 y 4.78. */
+  --t2-sobre-calido:     #46505c;
+  --acento-sobre-calido: #a32f0d;
 
   /* ---- Estado: escala aparte de la marca, a propósito ---- */
   --green:     #0f7a58;
@@ -7411,23 +7416,69 @@ details.faq-item[open] .faq-a {
 
    En columna se ve entera y nítida, y el velo deja de hacer falta porque ya no
    hay texto sobre la foto. Paco lo pidió así: «claras y completas». */
+/* El fondo del slide de agente. Era un degradado plano y Paco lo pidió con
+   más cuerpo (8-sep-2026). Se construye con capas de CSS, sin una sola imagen
+   nueva: nada que descargar, nada que se vea borroso en pantalla retina.
+
+   El orden importa —la primera capa va ENCIMA—:
+     1. Una rejilla de puntos finísima, que da textura sin dibujar nada.
+     2. Dos halos radiales, naranja arriba a la derecha y azul abajo a la
+        izquierda, muy diluidos: rompen la planitud y son de marca.
+     3. El degradado base, que es el que ya había.
+
+   Todo va MUY suave a propósito: el texto del slide es azul marino sobre este
+   fondo y cualquier capa densa se le come el contraste. Medido: 13.6:1. */
 .hs-con-retrato .hs-bg {
-  background: linear-gradient(135deg, #fff2ee 0%, #ffe9d0 55%, #fff 100%);
+  background-image:
+    radial-gradient(rgba(0,34,79,.055) 1px, transparent 1px),
+    radial-gradient(circle at 88% 12%, rgba(254,96,49,.13) 0%, transparent 45%),
+    radial-gradient(circle at 6% 92%, rgba(0,34,79,.13) 0%, transparent 42%),
+    linear-gradient(135deg, #fff4f0 0%, #ffe9d6 52%, #fdfdff 100%);
+  background-size: 22px 22px, auto, auto, auto;
 }
+
+/* El slide recorta lo suyo. Tiene esquinas redondeadas pero `overflow:visible`,
+   así que el arco de aquí abajo se dibujaba FUERA de la tarjeta, como una
+   mancha gris sobre el blanco de la página. Se acota solo a este tipo de
+   slide para no cambiar el comportamiento de los demás. */
+.hs-con-retrato { overflow: hidden; }
+
+/* Y un arco de marca detrás del retrato, para que la foto se apoye en algo en
+   vez de flotar sola sobre el degradado. */
+.hs-retrato::before {
+  content: '';
+  position: absolute; z-index: 0;
+  width: 78%; aspect-ratio: 1;
+  right: -6%; bottom: -8%;
+  border-radius: 46% 54% 50% 50% / 52% 48% 52% 48%;
+  background: linear-gradient(150deg, rgba(254,96,49,.22), rgba(0,34,79,.10));
+}
+
 .hs-con-retrato .hs-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  /* La foto pasa de 320 a 420 de tope: Paco la quiere más grande. */
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
   align-items: center;
   gap: 2.5rem;
 }
-.hs-retrato { margin: 0; display: flex; justify-content: center; }
+/* El texto de ESTE slide va más oscuro que en el resto del sitio.
+
+   No es capricho ni lo trajo el fondo nuevo: el degradado cálido ya estaba y
+   `--t2` sobre él da 3.95, cuando AA pide 4.5 — se descubrió al medir el
+   contraste después de cargar el fondo. La etiqueta iba peor todavía, 3.18.
+   Con estas dos variantes: 5.54 y 4.78. */
+.hs-con-retrato .hs-desc  { color: var(--t2-sobre-calido); }
+.hs-con-retrato .hs-label { color: var(--acento-sobre-calido); }
+
+.hs-retrato { margin: 0; display: flex; justify-content: center; position: relative; }
 .hs-retrato img {
+  position: relative; z-index: 1;
   width: 100%; height: auto;
   /* `contain` y no `cover`: el encargo era ver la foto COMPLETA. Con `cover`
      volveríamos a recortarla, que es de donde venimos. */
-  max-height: 400px; object-fit: contain;
+  max-height: 480px; object-fit: contain;
   border-radius: var(--r-lg);
-  box-shadow: 0 12px 32px rgba(0,34,79,.16);
+  box-shadow: 0 18px 44px rgba(0,34,79,.20);
 }
 
 .hs-inner {
@@ -7474,14 +7525,20 @@ details.faq-item[open] .faq-a {
      el retrato en columna ya no hay nada que despejar. */
   .hs-agente:not(.hs-con-retrato) .hs-inner { padding-top: 10rem; }
 
-  /* En móvil no caben dos columnas: la foto va arriba y el texto debajo, que
-     es el orden en que se mira una tarjeta de persona. */
+  /* En móvil la foto SIGUE a la derecha, no arriba (8-sep-2026, Paco). Dos
+     columnas en 375px es estrecho, así que el texto se aprieta con un título
+     algo menor y la foto se queda con el 44% del ancho. */
   .hs-con-retrato .hs-inner {
-    grid-template-columns: 1fr;
-    gap: 1.2rem;
+    grid-template-columns: minmax(0, 1fr) 44%;
+    gap: 1rem;
+    align-items: center;
   }
-  .hs-con-retrato .hs-retrato { order: -1; }
-  .hs-con-retrato .hs-retrato img { max-height: 230px; width: auto; }
+  .hs-con-retrato .hs-titulo { font-size: clamp(1.35rem, 6.4vw, 1.9rem); }
+  .hs-con-retrato .hs-desc { font-size: .84rem; margin-bottom: 1rem; }
+  .hs-con-retrato .hs-retrato img { max-height: 300px; }
+  /* El botón a todo el ancho de SU columna, no de la fila: si se estira por
+     debajo de la foto, el slide se descuadra. */
+  .hs-con-retrato .hs-acciones .btn { flex: 1 1 auto; font-size: .85rem; }
   .hs-acciones .btn { flex: 1 1 100%; justify-content: center; }
 }
 
