@@ -120,8 +120,8 @@
    Resultado: «Vaxti» pasa de 35px a 46px (un 31% más grande) y la barra baja
    de 100px a 68px. Más logo y menos aire, que era justo lo pedido. */
 @media (max-width: 768px) {
-  :root { --nav-h: 68px; }
-  .nav .nav-logo { height: 46px; display: flex; align-items: center; }
+  :root { --nav-h: 84px; }
+  .nav .nav-logo { height: 64px; display: flex; align-items: center; }
 }
 
 /* ─── Reset ─────────────────────────────────────────────── */
@@ -6901,7 +6901,7 @@ details.faq-item[open] .faq-a {
 @media (max-width: 768px) {
 
   /* ── Nav height ── */
-  :root { --nav-h: 68px; }
+  :root { --nav-h: 84px; }
 
   /* ── Nav: sticky en móvil para que el hero fluya debajo ── */
 
@@ -6937,11 +6937,20 @@ details.faq-item[open] .faq-a {
     gap:            0;
   }
 
-  /* 46px que SÍ son 46px de «Vaxti», porque la imagen ya no arrastra el
-     «Asesores Financieros». Conserva el `!important` porque hay otras dos
-     reglas de altura para este mismo elemento más arriba (108px y 78px),
-     heredadas del port: quitarlo devolvería el logo a 78px. */
-  .nav .nav-logo img { height: 46px !important; }
+  /* 64px, y el número no se entiende sin la historia:
+     · Al principio: `logo.png` (lockup completo) a 52px. El wordmark «Vaxti»
+       ocupa solo el 67% del alto de ese archivo, así que se leía a 35px.
+     · 2-sep-2026: Paco pidió más logo y menos hueco. Se generó `logo-nav.png`
+       —solo el wordmark— y bastaron 46px.
+     · 8-sep-2026: Paco quiere el lockup COMPLETO en la barra, con el «Asesores
+       Financieros». Se vuelve a `logo.png`, pero a 64px en vez de los 52
+       originales: 64 × 0.67 = 43px de «Vaxti», casi lo que daba el wordmark
+       solo. Se lee completo Y grande.
+
+     Conserva el `!important` porque hay otras dos reglas de altura para este
+     mismo elemento más arriba (108px y 78px), heredadas del port: quitarlo
+     devolvería el logo a 78px. */
+  .nav .nav-logo img { height: 64px !important; }
 
   /* ── Centro del nav: columna AGENTES + tagline ── */
   .nav-lema-mobile {
@@ -7910,7 +7919,7 @@ body { padding-top: var(--nav-h); }
      cambia el alto de la barra y no se ve el efecto, es que se tocó otra. */
   /* La barra del panel baja igual que la pública: es sticky, así que su alto
      sale de aquí y no del contenido. 94 → 62 con un logo de 40. */
-  :root { --nav-h: 68px; --topbar-h: 62px; }
+  :root { --nav-h: 84px; --topbar-h: 76px; }
   .nav { padding: 0 1rem; }
   .nav-center { display: none; }
   .nav-brand-title { font-size: 1.05rem; }
@@ -8882,7 +8891,10 @@ body.con-aviso-demo { padding-top: calc(var(--nav-h) + var(--alto-aviso, 30px));
      «Asesores Financieros». Con `logo-nav.png` esos 78px serían 78px de
      «Vaxti» y el logo se comía la barra del panel. 40 da un wordmark
      equivalente al de antes y deja respirar. (2-sep-2026) */
-  .nav-logo .logo-img, .panel-marca .logo-img { height: 40px; }
+  /* 40px se quedaron cortos al volver al lockup completo (8-sep-2026): con
+     `logo.png` dejan el «Vaxti» en 27 y el «Asesores Financieros» ilegible.
+     56 lo deja legible sin comerse la barra del panel. */
+  .nav-logo .logo-img, .panel-marca .logo-img { height: 56px; }
   .footer-brand .logo-img { height: 124px; }   /* el pie SÍ usa el lockup */
 }
 
