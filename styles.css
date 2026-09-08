@@ -7394,11 +7394,40 @@ details.faq-item[open] .faq-a {
 .hs-marca  .hs-bg { background: linear-gradient(135deg, #fff2ee 0%, #ffe9d0 55%, #fff 100%); }
 .hs-agenda .hs-bg { background: linear-gradient(135deg, var(--vaxti-azul) 0%, #1c3a5c 100%); }
 
-/* Sobre foto de agente hace falta un velo para que el texto se lea */
-.hs-agente .hs-bg::after {
+/* Velo para que el texto se lea SOBRE una imagen de fondo. Solo aplica al
+   fondo `imagen` —la que sube el Director— porque ahí el texto sí va encima.
+   Los slides de agente ya no lo llevan: su foto está al lado, no debajo. */
+.hs-agente:not(.hs-con-retrato) .hs-bg::after {
   content: ''; position: absolute; inset: 0;
   background: linear-gradient(100deg, rgba(255,255,255,.97) 0%,
               rgba(255,255,255,.90) 42%, rgba(255,255,255,.30) 72%, transparent 100%);
+}
+
+/* ── Slide de agente: la foto va AL LADO, no de fondo (8-sep-2026) ─────────
+   Era un `background-image` con `cover` y salía la coronilla. No era la
+   posición: es geometría. La banda mide 2.49:1 y los retratos 0.86:1, así que
+   con `cover` solo cabía el 34% del alto de la foto. Y el velo de arriba, que
+   hacía falta para leer el texto encima, la dejaba lavada.
+
+   En columna se ve entera y nítida, y el velo deja de hacer falta porque ya no
+   hay texto sobre la foto. Paco lo pidió así: «claras y completas». */
+.hs-con-retrato .hs-bg {
+  background: linear-gradient(135deg, #fff2ee 0%, #ffe9d0 55%, #fff 100%);
+}
+.hs-con-retrato .hs-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  align-items: center;
+  gap: 2.5rem;
+}
+.hs-retrato { margin: 0; display: flex; justify-content: center; }
+.hs-retrato img {
+  width: 100%; height: auto;
+  /* `contain` y no `cover`: el encargo era ver la foto COMPLETA. Con `cover`
+     volveríamos a recortarla, que es de donde venimos. */
+  max-height: 400px; object-fit: contain;
+  border-radius: var(--r-lg);
+  box-shadow: 0 12px 32px rgba(0,34,79,.16);
 }
 
 .hs-inner {
@@ -7436,12 +7465,23 @@ details.faq-item[open] .faq-a {
   .hero-slides { min-height: 400px; }
   .hs-inner { padding: 2.2rem 1.25rem; }
   .hs-titulo { max-width: 100%; }
-  .hs-agente .hs-bg { background-position: center 15%; }
-  .hs-agente .hs-bg::after {
+  .hs-agente:not(.hs-con-retrato) .hs-bg { background-position: center 15%; }
+  .hs-agente:not(.hs-con-retrato) .hs-bg::after {
     background: linear-gradient(180deg, rgba(255,255,255,.30) 0%,
                 rgba(255,255,255,.92) 45%, #fff 100%);
   }
-  .hs-agente .hs-inner { padding-top: 10rem; }
+  /* Las 10rem de arriba dejaban ver la foto de fondo por encima del texto. Con
+     el retrato en columna ya no hay nada que despejar. */
+  .hs-agente:not(.hs-con-retrato) .hs-inner { padding-top: 10rem; }
+
+  /* En móvil no caben dos columnas: la foto va arriba y el texto debajo, que
+     es el orden en que se mira una tarjeta de persona. */
+  .hs-con-retrato .hs-inner {
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+  }
+  .hs-con-retrato .hs-retrato { order: -1; }
+  .hs-con-retrato .hs-retrato img { max-height: 230px; width: auto; }
   .hs-acciones .btn { flex: 1 1 100%; justify-content: center; }
 }
 

@@ -614,6 +614,37 @@ async function cargarHero() {
    =========================================================================== */
 /* Un slide armado desde el panel. Los tres fondos son los que ya existían en
    el CSS, para que lo que monte el Director se vea como el resto del sitio. */
+/* El retrato del agente en el slide.
+
+   POR QUÉ NO ES UN `background-image` (8-sep-2026)
+   Lo era, y salía la coronilla. No fue un `background-position` mal puesto:
+   es geometría. La banda del hero mide 1224×491 —relación 2.49:1— y las fotos
+   de los agentes son retratos de 600×700 —0.86:1—. Con `cover`, para llenar el
+   ancho hay que ampliar tanto que **solo cabe el 34% del alto de la foto**.
+   Ningún ajuste de posición arregla eso; dos tercios de la persona se quedan
+   fuera sí o sí.
+
+   Encima llevaba un velo blanco al 97% para que el texto se leyera encima, que
+   es lo que la dejaba lavada.
+
+   Ahora la foto es una COLUMNA propia al lado del texto: se ve entera, nítida
+   y sin velo, porque ya no hay texto encima que necesite contraste.
+
+   Solo aplica al fondo `agente`. El fondo `imagen` —la que sube el Director
+   desde Apariencia— sigue de fondo a pantalla completa: esa suele ser un
+   banner horizontal ya compuesto, y meterla en una columna sería estropearla. */
+function bloqueRetrato(foto, nombre) {
+  if (!foto) return '';
+  /* SIN `loading="lazy"`. En un carrusel es contraproducente: los slides que
+     no están activos se ocultan con opacidad, el navegador no los considera
+     visibles y nunca dispara la carga — la foto se quedaba en 0×0 y el hueco
+     colapsado. Son cuatro imágenes como mucho, y están en lo primero que se
+     ve de la página. */
+  return `<figure class="hs-retrato">
+      <img src="${esc(foto)}" alt="${esc(nombre || '')}" />
+    </figure>`;
+}
+
 function slideConfigurado(s, activo) {
   const clase = { marca: 'hs-marca', azul: 'hs-agenda',
                   agente: 'hs-agente', imagen: 'hs-agente' }[s.fondo] || 'hs-marca';
@@ -622,8 +653,11 @@ function slideConfigurado(s, activo) {
   // imagen propia que ya no esté.
   const foto = (s.fondo === 'agente' && s.agente_foto) ? s.agente_foto
              : (s.fondo === 'imagen' && s.imagen_url) ? s.imagen_url : null;
-  const bg = foto ? ` style="background-image:url('${esc(foto)}')"` : '';
-  const cls = foto ? clase : (clase === 'hs-agente' ? 'hs-marca' : clase);
+  // El retrato del agente va en columna; la imagen propia sigue de fondo.
+  const esRetrato = s.fondo === 'agente' && Boolean(foto);
+  const bg = (foto && !esRetrato) ? ` style="background-image:url('${esc(foto)}')"` : '';
+  const cls = (foto ? clase : (clase === 'hs-agente' ? 'hs-marca' : clase))
+            + (esRetrato ? ' hs-con-retrato' : '');
 
   // El segundo botón solo lo traen los banners de fábrica (ver
   // `bannersDeFabrica`); los que crea el Director llevan uno.
@@ -645,11 +679,14 @@ function slideConfigurado(s, activo) {
     <div class="hero-slide ${cls}${activo ? ' activa' : ''}">
       <div class="hs-bg"${bg}></div>
       <div class="hs-inner">
-        ${s.etiqueta ? `<p class="hs-label">${esc(s.etiqueta)}</p>` : ''}
-        <h2 class="hs-titulo">${esc(s.titulo)}${
-          s.titulo_acento ? `<br><span class="acento">${esc(s.titulo_acento)}</span>` : ''}</h2>
-        ${s.texto ? `<p class="hs-desc">${esc(s.texto)}</p>` : ''}
-        ${boton}
+        <div class="hs-texto">
+          ${s.etiqueta ? `<p class="hs-label">${esc(s.etiqueta)}</p>` : ''}
+          <h2 class="hs-titulo">${esc(s.titulo)}${
+            s.titulo_acento ? `<br><span class="acento">${esc(s.titulo_acento)}</span>` : ''}</h2>
+          ${s.texto ? `<p class="hs-desc">${esc(s.texto)}</p>` : ''}
+          ${boton}
+        </div>
+        ${esRetrato ? bloqueRetrato(foto, s.agente_nombre) : ''}
       </div>
     </div>`;
 }
@@ -725,6 +762,8 @@ function buildHero() {
     // `slideConfigurado` espera la foto ya resuelta, como la trae la vista.
     agente_foto: s.fondo === 'agente' && s.agente_id
       ? (AGENTES.find((a) => String(a.id) === String(s.agente_id)) || {}).foto : null,
+    agente_nombre: s.fondo === 'agente' && s.agente_id
+      ? (AGENTES.find((a) => String(a.id) === String(s.agente_id)) || {}).nombre : '',
   }, i === 0)).join('');
   pintarPuntosHero(dots, deFabrica.length);
   iniciarCarrusel();
@@ -2661,25 +2700,31 @@ function vistaPreviaBanner(s) {
                   agente: 'hs-agente', imagen: 'hs-agente' }[s.fondo] || 'hs-marca';
   let fondo = '';
   if (s.fondo === 'imagen' && s.imagen_url) fondo = s.imagen_url;
+  let nombreAg = '';
   if (s.fondo === 'agente' && s.agente_id) {
     const ag = AGENTES.find((a) => String(a.id) === String(s.agente_id));
-    if (ag) fondo = ag.foto;
+    if (ag) { fondo = ag.foto; nombreAg = ag.nombre; }
   }
-  const bg = fondo ? ` style="background-image:url('${esc(fondo)}')"` : '';
-  const cls = fondo ? clase : (clase === 'hs-agente' ? 'hs-marca' : clase);
+  const esRetrato = s.fondo === 'agente' && Boolean(fondo);
+  const bg = (fondo && !esRetrato) ? ` style="background-image:url('${esc(fondo)}')"` : '';
+  const cls = (fondo ? clase : (clase === 'hs-agente' ? 'hs-marca' : clase))
+            + (esRetrato ? ' hs-con-retrato' : '');
 
   return `
     <div class="hero-slide ${cls} activa apar-previa-slide">
       <div class="hs-bg"${bg}></div>
       <div class="hs-inner">
-        ${s.etiqueta ? `<p class="hs-label">${esc(s.etiqueta)}</p>` : ''}
-        <h2 class="hs-titulo">${esc(s.titulo || 'Título del banner')}${
-          s.titulo_acento ? `<br><span class="acento">${esc(s.titulo_acento)}</span>` : ''}</h2>
-        ${s.texto ? `<p class="hs-desc">${esc(s.texto)}</p>` : ''}
-        ${s.cta_texto ? `<div class="hs-acciones">
-            <span class="btn btn-acento btn-lg">
-              <i class="fas fa-calendar-check"></i> ${esc(s.cta_texto)}</span>
-          </div>` : ''}
+        <div class="hs-texto">
+          ${s.etiqueta ? `<p class="hs-label">${esc(s.etiqueta)}</p>` : ''}
+          <h2 class="hs-titulo">${esc(s.titulo || 'Título del banner')}${
+            s.titulo_acento ? `<br><span class="acento">${esc(s.titulo_acento)}</span>` : ''}</h2>
+          ${s.texto ? `<p class="hs-desc">${esc(s.texto)}</p>` : ''}
+          ${s.cta_texto ? `<div class="hs-acciones">
+              <span class="btn btn-acento btn-lg">
+                <i class="fas fa-calendar-check"></i> ${esc(s.cta_texto)}</span>
+            </div>` : ''}
+        </div>
+        ${esRetrato ? bloqueRetrato(fondo, nombreAg) : ''}
       </div>
     </div>`;
 }
