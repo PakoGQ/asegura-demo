@@ -7776,6 +7776,32 @@ details.faq-item[open] .faq-a {
   .search-asignar span { text-wrap: balance; }
 }
 
+/* «Agentes cerca de mí» — entre los chips de zona y el buscador (13-oct-2026).
+   Hermano de «¿No sabes a quién elegir?», pero en blanco con borde: así no se
+   confunden entre sí, y ninguno de los dos le quita el naranja sólido a
+   «Buscar». Misma altura tocable de 44px. */
+.search-cerca {
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+  width: fit-content; max-width: 100%;
+  margin: 0 auto .9rem; padding: .7rem 1.15rem;
+  background: var(--white);
+  border: 1px solid var(--border-h);
+  border-radius: 999px;
+  font: inherit; font-size: .87rem; font-weight: 600; line-height: 1.2;
+  color: var(--t1); cursor: pointer;
+  transition: border-color .2s ease, color .2s ease, transform .2s ease;
+}
+.search-cerca i { font-size: .95rem; color: var(--acento); }
+.search-cerca:hover {
+  border-color: var(--acento); color: var(--acento-dk);
+  transform: translateY(-1px);
+}
+.search-cerca:focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .search-cerca { transition: none; }
+  .search-cerca:hover { transform: none; }
+}
+
 /* El agente asignado, dentro del modal. */
 .asig-agente { display: flex; gap: .9rem; align-items: center; margin: .2rem 0 1rem; }
 .asig-agente img {

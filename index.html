@@ -90,6 +90,13 @@
   <button class="search-bar-toggle" id="searchToggle" aria-label="Buscar" aria-expanded="false">
     <i class="fas fa-search"></i>
   </button>
+  <!-- El atajo de ubicación, antes del buscador: quien no sabe ni qué escribir
+       llega con un toque a los agentes más cercanos. El permiso lo pide el
+       navegador hasta que se toca, no al cargar la página. -->
+  <button type="button" class="search-cerca" onclick="buscarCerca()">
+    <i class="fas fa-location-crosshairs"></i>
+    <span>Agentes cerca de mí</span>
+  </button>
   <form class="search-bar" id="searchForm">
     <i class="fas fa-search" style="color:var(--t3);font-size:.9rem"></i>
     <input type="text" id="searchInput" placeholder="Nombre del agente o tu código postal…" autocomplete="off" />
