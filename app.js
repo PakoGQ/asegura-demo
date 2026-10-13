@@ -809,6 +809,26 @@ function iniciarCarrusel() {
   hero.addEventListener('touchstart', pausarCarrusel, { passive: true });
   hero.addEventListener('touchend', () => setTimeout(reiniciarCarrusel, 4000), { passive: true });
 
+  // Deslizar con el dedo: hacia la izquierda avanza, hacia la derecha regresa.
+  // Solo cuenta si el gesto es claramente horizontal; uno en diagonal es
+  // alguien bajando por la página y no debe cambiarle el slide. Un toque
+  // corto tampoco: se queda en clic al botón.
+  let x0 = null, y0 = null;
+  hero.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { x0 = null; return; }
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+  }, { passive: true });
+  hero.addEventListener('touchend', (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    const dy = e.changedTouches[0].clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    irASlide(heroIndex + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+  hero.addEventListener('touchcancel', () => { x0 = null; }, { passive: true });
+
   // Con la pestaña en segundo plano no tiene sentido gastar el intervalo.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pausarCarrusel(); else reiniciarCarrusel();

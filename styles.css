@@ -7366,6 +7366,9 @@ details.faq-item[open] .faq-a {
   border-radius: var(--r-lg);
   border: 1px solid rgba(254,96,49,.18);
   box-shadow: 0 18px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.4);
+  /* El gesto horizontal lo maneja app.js para cambiar de slide; el vertical
+     y el zoom siguen siendo del navegador. */
+  touch-action: pan-y pinch-zoom;
 }
 
 /* Los slides se apilan en UNA celda de grid, no con position:absolute.
