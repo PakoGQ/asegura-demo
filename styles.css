@@ -7777,24 +7777,27 @@ details.faq-item[open] .faq-a {
 }
 
 /* «Agentes cerca de mí» — entre los chips de zona y el buscador (13-oct-2026).
-   Hermano de «¿No sabes a quién elegir?», pero en blanco con borde: así no se
-   confunden entre sí, y ninguno de los dos le quita el naranja sólido a
-   «Buscar». Misma altura tocable de 44px. */
+   Naranja sólido, a petición de Paco, para que resalte. Es el naranja HONDO y
+   no el de marca: blanco sobre #fe6031 da 3.03 de contraste y AA pide 4.5;
+   sobre #d1401a da 4.71. El hover oscurece más en vez de aclarar, para no
+   bajar de ahí. Misma altura tocable de 44px que «¿No sabes a quién elegir?». */
 .search-cerca {
   display: flex; align-items: center; justify-content: center; gap: .5rem;
   width: fit-content; max-width: 100%;
-  margin: 0 auto .9rem; padding: .7rem 1.15rem;
-  background: var(--white);
-  border: 1px solid var(--border-h);
+  margin: 0 auto .9rem; padding: .7rem 1.25rem;
+  background: var(--acento-dk);
+  border: 1px solid var(--acento-dk);
   border-radius: 999px;
   font: inherit; font-size: .87rem; font-weight: 600; line-height: 1.2;
-  color: var(--t1); cursor: pointer;
-  transition: border-color .2s ease, color .2s ease, transform .2s ease;
+  color: var(--white); cursor: pointer;
+  box-shadow: 0 4px 14px var(--acento-glow);
+  transition: background .2s ease, transform .2s ease, box-shadow .2s ease;
 }
-.search-cerca i { font-size: .95rem; color: var(--acento); }
+.search-cerca i { font-size: .95rem; color: var(--white); }
 .search-cerca:hover {
-  border-color: var(--acento); color: var(--acento-dk);
+  background: var(--acento-sobre-calido); border-color: var(--acento-sobre-calido);
   transform: translateY(-1px);
+  box-shadow: 0 6px 18px var(--acento-glow);
 }
 .search-cerca:focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
